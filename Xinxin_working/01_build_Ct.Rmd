@@ -1,0 +1,410 @@
+---
+title: "构建 C_t 与 State Dummies (Lee & Ma 2025 Replication)"
+author: "DATA2020 Project Team"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    theme: flatly
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo    = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  cache   = FALSE   # rolling VAR 那段如果跑过一次想缓存，把这个改 TRUE
+)
+```
+
+# 目标
+
+从 `EI_DATA.csv` 一路跑到 connectedness index $C_t$（月度 + 季度），HP filter，
+state dummies ($D_H, D_L$)，并复刻论文 Figure 1。
+
+**输出文件**（全部写到 `OUTPUT_DIR` 下）：
+
+| 文件 | 含义 |
+|---|---|
+| `data2_monthly.csv` | 月度 $C_t$，432 行（1981m1 - 2016m12，中点 dating） |
+| `Ct_quarterly.csv` | 季度 $C_t$（monthly 取平均），144 行 |
+| `states.csv` | quarter / C / log_C / trend / cycle / D_H / D_L |
+| `states_baseline.csv` | 1981Q1 – 2007Q4 子集（论文 LP sample，108 季度） |
+| `Figure1_replication.png` | 论文 Figure 1 复刻（1981Q1-2007Q4） |
+| `Figure1_extended_1981_2016.png` | full sample 版本（1981-2016） |
+
+> **关键 dating 约定**：原作者 `Fig_1.m`（MATLAB 画图脚本）将 rolling window 的
+> $C_t$ 定位在 **window 中点**而非末端。我们沿用作者的写法：
+>
+> - 第 1 个 monthly $C_t$ 用窗口 1976m1-1986m1，挂日期 **1981m1**（中点）
+> - 第 432 个 monthly $C_t$ 用窗口 2011m12-2021m12，挂日期 **2016m12**
+> - 这样季度 $C_t$ 范围 = **1981Q1 - 2016Q4**（144 季度），论文 Figure 1 完全对得上
+
+---
+
+# 0. 配置
+
+```{r config}
+TEST_MODE <- FALSE   # 想快速测试就改 TRUE，只跑前 30 次 rolling
+
+# ICPSR 原作者文件夹的路径（里面有 Fig_1/function.R 和 EI_DATA.csv）
+ICPSR_PATH  <- "/Users/norazhou/Desktop/DATA2020/Project/ICPSR_216361-V3.1"
+
+# 我们自己的输出路径
+OUTPUT_DIR  <- "/Users/norazhou/Desktop/DATA2020/Project/working/output_01"
+
+if (!dir.exists(OUTPUT_DIR)) dir.create(OUTPUT_DIR, recursive = TRUE)
+
+cat("ICPSR 路径:", ICPSR_PATH, "\n")
+cat("输出路径:  ", OUTPUT_DIR, "\n")
+```
+
+---
+
+# 1. 加载 packages
+
+如果缺包，先在 console 里装：
+```r
+install.packages(c("glmnet", "mFilter", "dplyr", "ggplot2", "lubridate"))
+```
+
+```{r packages}
+suppressPackageStartupMessages({
+  library(glmnet)      # Elastic Net
+  library(mFilter)     # HP filter
+  library(dplyr)       # 数据处理
+  library(ggplot2)     # 画图
+  library(lubridate)   # 处理日期
+})
+```
+
+---
+
+# 2. Source 原作者的 function.R
+
+里面定义了 `LVAR()`, `fevd_generalised()`, `sptable2012()` 等关键函数。
+
+> 注意：function.R 里的注释是韩文乱码（编码问题），但代码本身没问题，直接 source。
+
+```{r source-functions}
+source(file.path(ICPSR_PATH, "Fig_1", "function.R"))
+cat("已加载函数：LVAR, fevd_generalised, sptable2012\n")
+```
+
+---
+
+# 3. 读取 EI_DATA.csv
+
+这个 csv 是作者预处理好的，552 行（1976m1 - 2021m12）。
+
+列结构：`obs, Year, Month, AK..WY (51 states), IP, CPI, UNRATE, Stock, Interest_rate, stock_vol`
+
+```{r load-data}
+data_raw <- read.csv(
+  file.path(ICPSR_PATH, "Fig_1", "EI_DATA.csv"),
+  header = TRUE
+)
+
+cat("维度:", dim(data_raw), "（应为 552 × 60）\n")
+cat("前 6 列名：", paste(head(colnames(data_raw), 6), collapse = ", "), "...\n")
+
+# 取第 4 到 60 列
+sym        <- data_raw[, c(4:60)]
+data_House <- as.matrix(sym[, c(1:51)])
+
+# !!! 重要 !!!
+# function.R 里的 sptable2012() 会引用一个叫 "data" 的全局变量
+# 来取 51 个 state 的列名做 dimnames。原作者在 Fig_1.R 里有这一行，
+# 必须保留，不然会报 "length of 'dimnames' [1] not equal to array extent"
+data <- sym[, c(1:51)]
+
+# 时间轴
+year_vec  <- data_raw$Year
+month_vec <- data_raw$Month
+date_vec  <- as.Date(sprintf("%d-%02d-01", year_vec, month_vec))
+```
+
+---
+
+# 4. Rolling Elastic Net VAR
+
+每个 window 120 个月（10 年），往后滚一个月，算一次 connectedness。
+$C_t$ = total connectedness 指数（Diebold-Yilmaz 2014 的 spillover table 右下角）。
+
+> 跑完整版要 **10-15 分钟**，TEST_MODE 只要 ~1 分钟。
+> 每 20 次迭代会 print 一条进度。
+
+```{r rolling-var}
+window <- 120
+p      <- 1
+
+last <- nrow(data_House) - window - p + 1   # 应该是 432
+if (TEST_MODE) last <- 30
+
+matspill <- matrix(0, last, 1)
+
+cat("总迭代数:", last, "(TEST_MODE =", TEST_MODE, ")\n")
+cat("预计用时:", ifelse(TEST_MODE, "~1 min", "~10-15 min"), "\n\n")
+
+t0 <- Sys.time()
+
+for (i in seq_len(last)) {
+  data1       <- data_House[i:(window - 1 + p + i), ]
+  Rolling_VAR <- LVAR(data1, p = p, init = "ELASSO")
+  rolling_fe  <- fevd_generalised(Rolling_VAR, n.ahead = 10) * 100
+  th0         <- sptable2012(rolling_fe)
+  matspill[i] <- th0[(Rolling_VAR$K + 2), (Rolling_VAR$K + 1)]
+
+  if (i %% 20 == 0 || i == 1) {
+    elapsed  <- as.numeric(difftime(Sys.time(), t0, units = "mins"))
+    per_iter <- elapsed / i
+    remain   <- per_iter * (last - i)
+    cat(sprintf("  [%3d/%d] C_t = %.2f  |  elapsed %.1f min, eta %.1f min\n",
+                i, last, matspill[i], elapsed, remain))
+  }
+}
+
+cat("\n总用时:", round(as.numeric(difftime(Sys.time(), t0, units = "mins")), 2), "min\n")
+```
+
+---
+
+# 5. 保存月度 $C_t$
+
+> **重要 dating 约定**：原作者 `Fig_1.m`（MATLAB 画图脚本）把 rolling window
+> 的 $C_t$ dating 在 **window 的中点**，不是末端。
+>
+> - Window 1 覆盖 1976m1-1986m1（121 个月），中点 ＝ 1981m1
+> - 我们最初按"末端"dating 会让整条曲线相对原文**右移 5 年**
+> - 改成中点 dating 后，月度 $C_t$ 范围变成 **1981m1 - 2016m12**（共 432 个月）
+> - 季度 $C_t$ 范围 ＝ **1981Q1 - 2016Q4**（共 144 个季度，与论文 Figure 1 起点一致）
+>
+> **数值上 `matspill` 完全没变**，只是把每个观测挂到的日期左移了 60 个月。
+
+```{r save-monthly}
+# 中点 dating: 第一个 C_t 挂到第 61 个月（1981m1）
+# = window 中点 = (window/2) + 1
+ct_start_idx <- (window / 2) + 1   # = 61
+
+ct_monthly <- data.frame(
+  date  = date_vec[ct_start_idx:(ct_start_idx + last - 1)],
+  year  = year_vec[ct_start_idx:(ct_start_idx + last - 1)],
+  month = month_vec[ct_start_idx:(ct_start_idx + last - 1)],
+  C_t   = as.numeric(matspill)
+)
+
+write.csv(ct_monthly,
+          file = file.path(OUTPUT_DIR, "data2_monthly.csv"),
+          row.names = FALSE)
+
+cat("文件: data2_monthly.csv, 行数:", nrow(ct_monthly), "\n")
+cat("C_t: min =", round(min(ct_monthly$C_t), 2),
+    " mean =", round(mean(ct_monthly$C_t), 2),
+    " max =", round(max(ct_monthly$C_t), 2), "\n")
+
+head(ct_monthly)
+```
+
+```{r test-mode-stop, eval=TEST_MODE}
+# 如果是 TEST_MODE，到这里停了，后面 HP / dummies 没意义
+knitr::knit_exit("TEST_MODE 模式下提前结束。请把 TEST_MODE 改成 FALSE 重新跑。")
+```
+
+---
+
+# 6. 月度 → 季度
+
+论文的 LP 是季度频率，把月度 $C_t$ 按季度平均。
+
+```{r quarterly}
+ct_quarterly <- ct_monthly %>%
+  mutate(quarter = paste0(year, "Q", ((month - 1) %/% 3) + 1)) %>%
+  group_by(year, qtr = ((month - 1) %/% 3) + 1) %>%
+  summarise(C = mean(C_t), .groups = "drop") %>%
+  mutate(quarter = paste0(year, "Q", qtr)) %>%
+  arrange(year, qtr) %>%
+  select(quarter, year, qtr, C)
+
+write.csv(ct_quarterly,
+          file = file.path(OUTPUT_DIR, "Ct_quarterly.csv"),
+          row.names = FALSE)
+
+cat("Ct_quarterly.csv 行数:", nrow(ct_quarterly),
+    "（应为 144 季度：1981Q1 - 2016Q4，中点 dating 后）\n")
+```
+
+---
+
+# 7. HP Filter (两套！)
+
+> ⚠️ **论文里有两套 HP filter，不要混淆：**
+>
+> | 用途 | 对什么做 HP | 输出 |
+> |---|---|---|
+> | (A) Figure 1 plot 的 trend（视觉） | RAW $C_t$ | `trend_raw`, `cycle_raw` |
+> | (B) Fig_2.prg LP 的 state dummies | $\log(C_t) \times 100$ | `trend`, `cycle` |
+>
+> $D_H, D_L$ 派生自 (B) 的 cycle，跟论文 Fig_2.prg 完全一致。
+
+```{r hp-filter}
+# (A) plot 用：raw C_t 的 HP
+hp_raw <- hpfilter(ct_quarterly$C, freq = 1600, type = "lambda")
+ct_quarterly$trend_raw <- as.numeric(hp_raw$trend)
+ct_quarterly$cycle_raw <- as.numeric(hp_raw$cycle)
+
+# (B) LP 用：log(C_t)*100 的 HP
+log_C  <- log(ct_quarterly$C) * 100
+hp_log <- hpfilter(log_C, freq = 1600, type = "lambda")
+
+ct_quarterly$log_C <- log_C
+ct_quarterly$trend <- as.numeric(hp_log$trend)
+ct_quarterly$cycle <- as.numeric(hp_log$cycle)
+
+ct_quarterly$D_H <- as.integer(ct_quarterly$cycle >= 0)
+ct_quarterly$D_L <- as.integer(ct_quarterly$cycle <  0)
+```
+
+---
+
+# 8. State Dummies
+
+- $D_H = 1$ if cycle (log) $\geq 0$ → high-connectedness state
+- $D_L = 1$ if cycle (log) $< 0$ → low-connectedness state
+
+```{r dummies}
+ct_quarterly$D_H <- as.integer(ct_quarterly$cycle >= 0)
+ct_quarterly$D_L <- as.integer(ct_quarterly$cycle <  0)
+
+p_DH <- mean(ct_quarterly$D_H)
+cat("D_H 占比:", round(p_DH * 100, 1), "%（应该在 40-60% 附近）\n")
+```
+
+---
+
+# 9. 保存 states.csv
+
+输出列：
+
+- `C, trend_raw, cycle_raw` → raw scale，画 Figure 1 用
+- `log_C, trend, cycle` → log scale，LP 用（D_H/D_L 由它派生）
+
+```{r save-states}
+states_full <- ct_quarterly %>%
+  select(quarter, year, qtr,
+         C, trend_raw, cycle_raw,
+         log_C, trend, cycle,
+         D_H, D_L)
+
+write.csv(states_full,
+          file = file.path(OUTPUT_DIR, "states.csv"),
+          row.names = FALSE)
+
+# baseline: 1981Q1 - 2007Q4（论文 LP 的 sample）
+# 中点 dating 修正后，C_t 从 1981Q1 开始，所以 baseline 也用 1981Q1+
+states_baseline <- states_full %>%
+  filter(year >= 1981 & year <= 2007)
+
+write.csv(states_baseline,
+          file = file.path(OUTPUT_DIR, "states_baseline.csv"),
+          row.names = FALSE)
+
+cat("states.csv 行数:         ", nrow(states_full),     "\n")
+cat("states_baseline.csv 行数:", nrow(states_baseline), "（应为 108：1981Q1-2007Q4）\n")
+
+head(states_baseline)
+```
+
+---
+
+# 10. 复刻 Figure 1
+
+> 论文 Figure 1 画的是 **RAW $C_t$**（百分比，0-100），**不是 log scale**！
+> y 轴自然落在 88-96 之间。
+> x 轴 clip 到 1986Q1 - 2007Q4 跟原文比对。
+
+```{r figure1, fig.width=10, fig.height=6}
+plot_df <- ct_quarterly %>%
+  mutate(date = as.Date(paste0(year, "-", sprintf("%02d", (qtr - 1) * 3 + 1), "-01"))) %>%
+  filter(year >= 1981 & year <= 2007)
+
+p_fig1 <- ggplot(plot_df, aes(x = date)) +
+  geom_ribbon(aes(ymin = pmin(C, trend_raw),
+                  ymax = pmax(C, trend_raw),
+                  fill = factor(D_H)), alpha = 0.35) +
+  geom_line(aes(y = C),         color = "black", linewidth = 0.6) +
+  geom_line(aes(y = trend_raw), color = "blue",  linewidth = 0.8, linetype = "dashed") +
+  scale_fill_manual(values = c("0" = "lightblue", "1" = "salmon"),
+                    labels = c("0" = "Low state",  "1" = "High state"),
+                    name = "State") +
+  scale_x_date(date_breaks = "5 years", date_labels = "%Y") +
+  scale_y_continuous(limits = c(88, 96)) +
+  labs(title = "Figure 1 Replication: Connectedness (Level vs Trend 1981-2007)",
+       subtitle = "Black: C_t level | Blue dashed: HP trend | Shading: state",,
+       x = "Year", y = "Connectedness (%)") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+
+p_fig1
+```
+
+## Extended (1981-2016)
+
+```{r figure1-extended, fig.width=10, fig.height=6}
+plot_df_full <- ct_quarterly %>%
+  mutate(date = as.Date(paste0(year, "-", sprintf("%02d", (qtr - 1) * 3 + 1), "-01")))
+
+p_fig1_full <- ggplot(plot_df_full, aes(x = date)) +
+  geom_ribbon(aes(ymin = pmin(C, trend_raw),
+                  ymax = pmax(C, trend_raw),
+                  fill = factor(D_H)), alpha = 0.35) +
+  geom_line(aes(y = C),         color = "black", linewidth = 0.6) +
+  geom_line(aes(y = trend_raw), color = "blue",  linewidth = 0.8, linetype = "dashed") +
+  scale_fill_manual(values = c("0" = "lightblue", "1" = "salmon"),
+                    labels = c("0" = "Low state",  "1" = "High state"),
+                    name = "State") +
+  scale_x_date(date_breaks = "5 years", date_labels = "%Y") +
+  labs(title = "Figure 1 (Extended): Connectedness 1981-2016",
+       subtitle = "Black: C_t level | Blue dashed: HP trend | Shading: state",
+       x = "Year", y = "Connectedness (%)") +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "bottom")
+
+p_fig1_full
+```
+
+---
+
+# 11. 完工报告
+
+```{r summary, echo=FALSE}
+cat("========================================\n")
+cat("  全部完成！所有文件在：\n")
+cat("  ", OUTPUT_DIR, "\n")
+cat("========================================\n")
+cat("  📄 data2_monthly.csv               月度 C_t\n")
+cat("  📄 Ct_quarterly.csv                季度 C_t\n")
+cat("  📄 states.csv                      full sample + HP + dummies\n")
+cat("  📄 states_baseline.csv             1986Q1-2007Q4\n")
+cat("  🖼  Figure1_replication.png            论文 Figure 1 复刻\n")
+cat("  🖼  Figure1_extended_1981_2016.png     扩展版\n")
+cat("========================================\n\n")
+
+cat("【后天对账检查清单】\n")
+cat("  1. data2_monthly.csv 应该有", last, "行 (1981m1 - 2016m12)\n")
+cat("  2. C_t 数值范围通常 88-96 之间\n")
+cat("  3. D_H 占比应在 40-60%\n")
+cat("  4. baseline 样本应有 108 个季度 (1981Q1 - 2007Q4)\n")
+cat("  5. Figure1 trough 应在 ~1987-1988，peak 应在 ~2003-2004\n")
+cat("  6. 形状应该跟原文 Figure 1 在 1981-2007 区间高度吻合\n")
+```
+
+---
+
+# Session Info（debug 用）
+
+```{r session-info}
+sessionInfo()
+```
