@@ -18,11 +18,11 @@ library(lmtest)
 
 # Load macro data (adjust path if needed) 
 # The macroeconomic variables
-macro <- read_excel("All_data.xls", sheet = "Macro_data") 
+macro <- read_excel("~/Documents/Brown/Classes/DATA2020/Final Project/DATA_2020_Project/Figure 2/Fig_2_R/All_data.xls", sheet = "Macro_data") 
 
 # Load connectedness index (monthly)
 # The connectedness index
-data2 <- read.csv("data2.csv")
+data2 <- read.csv("~/Documents/Brown/Classes/DATA2020/Final Project/DATA_2020_Project/Figure 2/Fig_2_R/data2.csv")
 
 # ============================================================
 # STEP 2 - Convert connectedness from monthly to quarterly

@@ -8,11 +8,11 @@ r_pce <- read.csv("est_2_R.csv")
 r_ffr <- read.csv("est_3_R.csv")
 
 # Load original EViews results - fix column names
-orig_gdp <- read.csv("../Fig_2/est_1.csv",
+orig_gdp <- read.csv("~/Documents/Brown/Classes/DATA2020/Final Project/DATA_2020_Project/Figure 2/Fig_2/est_1.csv",
                      header = FALSE, skip = 1)
-orig_pce <- read.csv("../Fig_2/est_2.csv",
+orig_pce <- read.csv("~/Documents/Brown/Classes/DATA2020/Final Project/DATA_2020_Project/Figure 2/Fig_2/est_2.csv",
                      header = FALSE, skip = 1)
-orig_ffr <- read.csv("../Fig_2/est_3.csv",
+orig_ffr <- read.csv("~/Documents/Brown/Classes/DATA2020/Final Project/DATA_2020_Project/Figure 2/Fig_2/est_3.csv",
                      header = FALSE, skip = 1)
 
 # Assign correct column names
