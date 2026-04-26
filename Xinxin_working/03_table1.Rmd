@@ -1,0 +1,362 @@
+---
+title: "Table 1 — LP Point Estimates & High-vs-Low Test"
+subtitle: "Lee & Ma (2025) Replication"
+author: "Person A"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+    df_print: paged
+    theme: flatly
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# 0. 配置 / Paths
+
+```{r paths}
+SHARED_ROOT <- "/Users/norazhou/Documents/Claude/Projects/2020 Project"
+DATA_DIR    <- file.path(SHARED_ROOT, "data")
+OUTPUT_DIR  <- file.path(SHARED_ROOT, "output_03")
+FIG2_OUT    <- file.path(SHARED_ROOT, "output_02")   # 02_fig2.Rmd 的输出
+
+dir.create(OUTPUT_DIR, showWarnings = FALSE, recursive = TRUE)
+
+# 加载共享 LP 函数 (用来跑 high-vs-low Wald test)
+source(file.path(SHARED_ROOT, "R/lp_functions.R"))
+
+suppressPackageStartupMessages({
+  library(dplyr)
+  library(tidyr)
+  library(readr)
+  library(lubridate)
+  library(sandwich)
+  library(lmtest)
+  library(car)        # linearHypothesis() — Wald test
+  library(knitr)
+  library(kableExtra)
+})
+
+# ===========================================================================
+# 报告用的横轴 horizons (论文 Table 1 通常报告几个代表性的 horizon)
+# ===========================================================================
+TABLE_HORIZONS <- c(1, 4, 8, 12, 16, 20)
+
+# 跟 Fig 2 一致
+SAMPLE_START <- as.Date("1981-01-01")
+SAMPLE_END   <- as.Date("2007-10-01")
+MAX_H        <- 20
+MAX_LAG      <- 4
+CI_LEVEL     <- 0.68
+```
+
+# 1. 读 Fig 2 的 LP 结果 (point + SE)
+
+依赖 `02_fig2.Rmd` 已经跑过, `Fig2_results.csv` 在 `output_02/` 里.
+
+```{r load-results}
+results_path <- file.path(FIG2_OUT, "Fig2_results.csv")
+
+if (!file.exists(results_path)) {
+  stop("找不到 Fig2_results.csv. 请先 knit 02_fig2.Rmd.")
+}
+
+results <- read_csv(results_path, show_col_types = FALSE)
+cat("载入:", results_path, "\n")
+cat("行数:", nrow(results), "(应为 3 deps × 3 specs × 21 horizons = 189)\n\n")
+
+head(results)
+```
+
+# 2. Table 1a — 点估计 + SE (主体表)
+
+格式: 每行 = (dep × spec), 每列 = horizon. 单元格 = `point (se)`.
+
+```{r table1a}
+table1a <- results %>%
+  filter(horizon %in% TABLE_HORIZONS) %>%
+  mutate(
+    cell = sprintf("%.3f\n(%.3f)", point, se)
+  ) %>%
+  select(dep, spec, horizon, cell) %>%
+  pivot_wider(names_from = horizon, values_from = cell, names_prefix = "h=") %>%
+  arrange(dep, factor(spec, levels = c("linear", "high", "low")))
+
+# 改 spec 显示名
+table1a <- table1a %>%
+  mutate(spec = recode(spec,
+                       "linear" = "Linear",
+                       "high"   = "High C_t",
+                       "low"    = "Low C_t"))
+
+# 存原始 CSV (方便 LaTeX/Word 导入)
+write_csv(table1a, file.path(OUTPUT_DIR, "Table1a_point_estimates.csv"))
+
+table1a %>%
+  kable(format = "html",
+        caption = "Table 1a — LP Point Estimates (SE in parentheses), 1981Q1-2007Q4",
+        align = c("l", "l", rep("c", length(TABLE_HORIZONS)))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE) %>%
+  pack_rows("GDP",       1, 3) %>%
+  pack_rows("CPI (PCE)", 4, 6) %>%
+  pack_rows("FFR",       7, 9) %>%
+  collapse_rows(columns = 1, valign = "middle")
+```
+
+# 3. Table 1b — High - Low 差 + Wald test
+
+为了做 High vs Low 的差异检验, 不能直接用 SE_high 和 SE_low (它们之间有协方差).
+正确做法: **重新跑** state LP, 但参数化为 `shock + D_H:shock`, 这样:
+- `shock` 系数 = Low state response (因为 D_H = 0 时只剩 baseline)
+- `D_H:shock` 系数 = **High - Low 差**, 它的 t / Wald test 直接就是差异检验
+
+```{r helper-diff-test}
+# ----------------------------------------------------------------------------
+# run_lp_diff(): 同 run_lp 的 state 版, 但返回 high-low 差异 + p-value
+# 思路: 用 shock + D_H:shock 参数化 (D_L 当 baseline)
+# ----------------------------------------------------------------------------
+run_lp_diff <- function(data, dep, shock, controls, horizons,
+                        D_H_var = "D_H", policy_var = NULL,
+                        max_lag = 4, hac_lag = NULL) {
+  if (is.null(policy_var)) policy_var <- shock
+  out <- list()
+
+  for (h in horizons) {
+    y <- if (h == 0) dep else paste0(dep, "_h", h)
+    lag_for_nw <- if (is.null(hac_lag)) h + 1 else hac_lag
+
+    # 边界: h=0 dep==shock 直接跳 (差异 = 0)
+    if (h == 0 && dep == shock) {
+      out[[length(out) + 1]] <- data.frame(
+        horizon = 0, diff = 0, se_diff = 0, t_stat = NA, p_value = NA
+      )
+      next
+    }
+
+    # ----- 构造 RHS -----
+    # 基础: shock + D_H + D_H:shock + 控制 + (D_H × 控制)
+    ctrl_main <- c()
+    ctrl_main <- c(ctrl_main, shock, paste0(shock, "_l", 1:max_lag))
+    for (v in controls) {
+      if (v != dep) ctrl_main <- c(ctrl_main, v)
+      ctrl_main <- c(ctrl_main, paste0(v, "_l", 1:max_lag))
+    }
+
+    # D_H 交互项
+    ctrl_int <- c(D_H_var,
+                  paste0(D_H_var, ":", shock),
+                  paste0(D_H_var, ":", policy_var, "_l", 1:max_lag))
+    for (v in controls) {
+      if (v != dep) ctrl_int <- c(ctrl_int, paste0(D_H_var, ":", v))
+      ctrl_int <- c(ctrl_int, paste0(D_H_var, ":", v, "_l", 1:max_lag))
+    }
+
+    rhs <- c(ctrl_main, ctrl_int, "trend", "trend2")
+    f <- as.formula(paste(y, "~", paste(rhs, collapse = " + ")))
+    m <- lm(f, data = data)
+    vc <- sandwich::NeweyWest(m, lag = lag_for_nw, prewhite = FALSE, adjust = TRUE)
+    ct <- lmtest::coeftest(m, vcov. = vc)
+
+    # 取 D_H:shock (R 的命名可能是 D_H:ffr 或 ffr:D_H)
+    n1 <- paste0(D_H_var, ":", shock)
+    n2 <- paste0(shock, ":", D_H_var)
+    coef_name <- if (n1 %in% rownames(ct)) n1 else if (n2 %in% rownames(ct)) n2 else NA
+    if (is.na(coef_name)) {
+      warning(sprintf("h=%d, dep=%s: 找不到差异项", h, dep))
+      out[[length(out) + 1]] <- data.frame(
+        horizon = h, diff = NA, se_diff = NA, t_stat = NA, p_value = NA
+      )
+      next
+    }
+
+    # 注意: paper 取 -1 倍 shock, 所以差异也 -1 倍
+    # high - low (paper convention) = -1 * (D_H:shock 系数)
+    diff_est <- -1 * ct[coef_name, "Estimate"]
+    se_diff  <-       ct[coef_name, "Std. Error"]
+    t_stat   <- diff_est / se_diff
+    p_value  <- 2 * (1 - pnorm(abs(t_stat)))
+
+    out[[length(out) + 1]] <- data.frame(
+      horizon = h, diff = diff_est, se_diff = se_diff,
+      t_stat = t_stat, p_value = p_value
+    )
+  }
+
+  bind_rows(out)
+}
+```
+
+```{r run-diff-tests}
+# 重新读数据 + 构造 LP 数据 (跟 Fig 2 一样的样本)
+ct    <- read_csv(file.path(DATA_DIR, "ct_quarterly.csv"), show_col_types = FALSE)
+macro <- read_csv(file.path(DATA_DIR, "macro_q.csv"),       show_col_types = FALSE)
+
+if (!"date" %in% names(ct)) {
+  ct <- ct %>% mutate(date = as.Date(sprintf("%d-%02d-01", year, (qtr - 1) * 3 + 1)))
+}
+macro$date <- as.Date(macro$date)
+
+df <- macro %>%
+  inner_join(ct %>% select(date, D_H, D_L), by = "date") %>%
+  filter(date >= SAMPLE_START, date <= SAMPLE_END) %>%
+  arrange(date)
+
+df_lp <- build_lp_data(df, max_lag = MAX_LAG, max_h = MAX_H,
+                       vars_to_lag  = c("log_gdp", "log_cpi", "ffr"),
+                       vars_to_lead = c("log_gdp", "log_cpi", "ffr"))
+
+# 跑 3 个 dep
+deps <- c("log_gdp", "log_cpi", "ffr")
+diff_list <- list()
+for (dep in deps) {
+  cat(sprintf("\n=== Diff test for %s ===\n", dep))
+  d <- run_lp_diff(
+    data       = df_lp,
+    dep        = dep,
+    shock      = "ffr",
+    controls   = c("log_gdp", "log_cpi"),
+    horizons   = 0:MAX_H,
+    D_H_var    = "D_H",
+    max_lag    = MAX_LAG
+  )
+  d$dep <- dep
+  diff_list[[dep]] <- d
+}
+
+diffs <- bind_rows(diff_list)
+diffs$dep <- factor(diffs$dep, levels = c("log_gdp", "log_cpi", "ffr"),
+                    labels = c("GDP", "CPI (PCE)", "FFR"))
+
+head(diffs, 10)
+```
+
+```{r table1b}
+# 加显著性星号
+star <- function(p) {
+  if (is.na(p)) return("")
+  if (p < 0.01) return("***")
+  if (p < 0.05) return("**")
+  if (p < 0.10) return("*")
+  return("")
+}
+
+table1b <- diffs %>%
+  filter(horizon %in% TABLE_HORIZONS) %>%
+  rowwise() %>%
+  mutate(
+    cell = sprintf("%.3f%s\n(%.3f)", diff, star(p_value), se_diff)
+  ) %>%
+  ungroup() %>%
+  select(dep, horizon, cell) %>%
+  pivot_wider(names_from = horizon, values_from = cell, names_prefix = "h=")
+
+write_csv(table1b, file.path(OUTPUT_DIR, "Table1b_diff_test.csv"))
+
+table1b %>%
+  kable(format = "html",
+        caption = paste0("Table 1b — High C_t minus Low C_t (Wald test, NW HAC SE).\n",
+                         "*** p<0.01, ** p<0.05, * p<0.10"),
+        align = c("l", rep("c", length(TABLE_HORIZONS)))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE)
+```
+
+# 4. Table 1 — 合体版 (paper 风格, 适合直接放论文)
+
+把 (a) 和 (b) 拼成一个 panel, 每个 dep 4 行: Linear / High / Low / (High - Low).
+
+```{r table1-combined}
+# 把 diffs 整理成跟 results 一样的结构 (point + se), spec = "diff"
+diff_as_spec <- diffs %>%
+  rename(point = diff, se = se_diff) %>%
+  mutate(
+    spec    = "diff",
+    ci_low  = point - 1.96 * se,
+    ci_high = point + 1.96 * se,
+    p_value = p_value
+  ) %>%
+  select(horizon, spec, point, se, ci_low, ci_high, dep, p_value)
+
+# 把 results (point + se) 跟 diff 合一起
+results2 <- results %>%
+  mutate(p_value = NA) %>%
+  bind_rows(diff_as_spec) %>%
+  mutate(spec = factor(spec, levels = c("linear", "high", "low", "diff"),
+                       labels = c("Linear", "High C_t", "Low C_t", "High - Low")))
+
+table1_full <- results2 %>%
+  filter(horizon %in% TABLE_HORIZONS) %>%
+  rowwise() %>%
+  mutate(
+    cell = if (spec == "High - Low") {
+      sprintf("%.3f%s\n(%.3f)", point, star(p_value), se)
+    } else {
+      sprintf("%.3f\n(%.3f)", point, se)
+    }
+  ) %>%
+  ungroup() %>%
+  select(dep, spec, horizon, cell) %>%
+  pivot_wider(names_from = horizon, values_from = cell, names_prefix = "h=") %>%
+  arrange(dep, spec)
+
+write_csv(table1_full, file.path(OUTPUT_DIR, "Table1_full.csv"))
+
+# 显示
+n_rows_per_dep <- 4
+table1_full %>%
+  kable(format = "html",
+        caption = paste0("Table 1 — Local Projection IRFs to Contractionary FFR Shock\n",
+                         "Sample 1981Q1-2007Q4 · NW HAC SE (lag = h+1) · *** p<0.01, ** p<0.05, * p<0.10"),
+        align = c("l", "l", rep("c", length(TABLE_HORIZONS)))) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"),
+                full_width = FALSE) %>%
+  pack_rows("GDP",       1,  4) %>%
+  pack_rows("CPI (PCE)", 5,  8) %>%
+  pack_rows("FFR",       9, 12) %>%
+  collapse_rows(columns = 1, valign = "middle")
+```
+
+# 5. 导出 LaTeX 版 (供报告 \input{} 用)
+
+```{r export-latex}
+# 简单的 LaTeX 表 (4 列宽, 不做 booktabs / multirow 高级排版)
+table1_full %>%
+  kable(format = "latex", booktabs = TRUE,
+        caption = "Local Projection IRFs (Fig 2 sample)",
+        label = "tab:lp_main",
+        align = c("l", "l", rep("c", length(TABLE_HORIZONS))),
+        escape = FALSE) %>%
+  cat(file = file.path(OUTPUT_DIR, "Table1_full.tex"))
+
+cat("已存:\n")
+cat("  ", file.path(OUTPUT_DIR, "Table1a_point_estimates.csv"), "\n")
+cat("  ", file.path(OUTPUT_DIR, "Table1b_diff_test.csv"), "\n")
+cat("  ", file.path(OUTPUT_DIR, "Table1_full.csv"), "\n")
+cat("  ", file.path(OUTPUT_DIR, "Table1_full.tex"), "\n")
+```
+
+# 6. Sanity check
+
+```{r sanity}
+# 抓 GDP h=8 的几个数, 跟 Fig 2 plot 对照
+gdp_h8 <- results %>% filter(dep == "GDP", horizon == 8)
+print(gdp_h8)
+
+# 差异显著性
+gdp_diff <- diffs %>% filter(dep == "GDP", horizon %in% c(4, 8, 12))
+print(gdp_diff)
+
+cat("\n如果 GDP 的 high-low 差异大部分 p > 0.10, 说明 (跟你 Fig 2 看到的现象一致)\n",
+    "state-dependence 在你的 88-季度子样本里识别力不够.\n")
+```
+
+# Session Info
+
+```{r session}
+sessionInfo()
+```
