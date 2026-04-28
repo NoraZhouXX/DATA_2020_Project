@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.27">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Your Name">
+
+<title>Lab 9: Causal Inference with Difference-in-Differences</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="Lab9_files/libs/clipboard/clipboard.min.js"></script>
+<script src="Lab9_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="Lab9_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="Lab9_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="Lab9_files/libs/quarto-html/popper.min.js"></script>
+<script src="Lab9_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="Lab9_files/libs/quarto-html/anchor.min.js"></script>
+<link href="Lab9_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="Lab9_files/libs/quarto-html/quarto-syntax-highlighting-ed96de9b727972fe78a7b5d16c58bf87.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="Lab9_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="Lab9_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="Lab9_files/libs/bootstrap/bootstrap-d6a003b94517c951b2d65075d42fb01b.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#introduction" id="toc-introduction" class="nav-link active" data-scroll-target="#introduction"><span class="header-section-number">1</span> Introduction</a></li>
+  <li><a href="#part-1-load-packages-and-data" id="toc-part-1-load-packages-and-data" class="nav-link" data-scroll-target="#part-1-load-packages-and-data"><span class="header-section-number">2</span> Part 1: Load Packages and Data</a>
+  <ul class="collapse">
+  <li><a href="#why-are-we-doing-this" id="toc-why-are-we-doing-this" class="nav-link" data-scroll-target="#why-are-we-doing-this"><span class="header-section-number">2.1</span> Why are we doing this?</a></li>
+  </ul></li>
+  <li><a href="#part-2-understand-the-variables" id="toc-part-2-understand-the-variables" class="nav-link" data-scroll-target="#part-2-understand-the-variables"><span class="header-section-number">3</span> Part 2: Understand the Variables</a>
+  <ul class="collapse">
+  <li><a href="#why-are-we-doing-this-1" id="toc-why-are-we-doing-this-1" class="nav-link" data-scroll-target="#why-are-we-doing-this-1"><span class="header-section-number">3.1</span> Why are we doing this?</a></li>
+  <li><a href="#key-variables-for-did" id="toc-key-variables-for-did" class="nav-link" data-scroll-target="#key-variables-for-did"><span class="header-section-number">3.2</span> Key Variables for DiD</a></li>
+  <li><a href="#critical-question" id="toc-critical-question" class="nav-link" data-scroll-target="#critical-question"><span class="header-section-number">3.3</span> Critical Question:</a></li>
+  </ul></li>
+  <li><a href="#check-for-missing-values" id="toc-check-for-missing-values" class="nav-link" data-scroll-target="#check-for-missing-values"><span class="header-section-number">4</span> Check for missing values</a>
+  <ul class="collapse">
+  <li><a href="#critical-question-1" id="toc-critical-question-1" class="nav-link" data-scroll-target="#critical-question-1"><span class="header-section-number">4.1</span> Critical Question:</a></li>
+  </ul></li>
+  <li><a href="#create-the-did-variables" id="toc-create-the-did-variables" class="nav-link" data-scroll-target="#create-the-did-variables"><span class="header-section-number">5</span> Create the DiD variables</a></li>
+  <li><a href="#critical-question-2" id="toc-critical-question-2" class="nav-link" data-scroll-target="#critical-question-2"><span class="header-section-number">6</span> Critical Question</a></li>
+  <li><a href="#part-3-descriptive-analysis" id="toc-part-3-descriptive-analysis" class="nav-link" data-scroll-target="#part-3-descriptive-analysis"><span class="header-section-number">7</span> Part 3: Descriptive Analysis</a>
+  <ul class="collapse">
+  <li><a href="#why-are-we-doing-this-2" id="toc-why-are-we-doing-this-2" class="nav-link" data-scroll-target="#why-are-we-doing-this-2"><span class="header-section-number">7.1</span> Why are we doing this?</a></li>
+  <li><a href="#critical-question-3" id="toc-critical-question-3" class="nav-link" data-scroll-target="#critical-question-3"><span class="header-section-number">7.2</span> Critical Question</a></li>
+  </ul></li>
+  <li><a href="#part-4-visualize-employment-and-wages" id="toc-part-4-visualize-employment-and-wages" class="nav-link" data-scroll-target="#part-4-visualize-employment-and-wages"><span class="header-section-number">8</span> Part 4: Visualize Employment and Wages</a>
+  <ul class="collapse">
+  <li><a href="#why-are-we-doing-this-3" id="toc-why-are-we-doing-this-3" class="nav-link" data-scroll-target="#why-are-we-doing-this-3"><span class="header-section-number">8.1</span> Why are we doing this?</a></li>
+  <li><a href="#critical-question-4" id="toc-critical-question-4" class="nav-link" data-scroll-target="#critical-question-4"><span class="header-section-number">8.2</span> Critical Question</a></li>
+  </ul></li>
+  <li><a href="#part-5-manual-did-calculation-for-employment" id="toc-part-5-manual-did-calculation-for-employment" class="nav-link" data-scroll-target="#part-5-manual-did-calculation-for-employment"><span class="header-section-number">9</span> Part 5: Manual DiD Calculation for Employment</a>
+  <ul class="collapse">
+  <li><a href="#why-are-we-doing-this-4" id="toc-why-are-we-doing-this-4" class="nav-link" data-scroll-target="#why-are-we-doing-this-4"><span class="header-section-number">9.1</span> Why are we doing this?</a></li>
+  <li><a href="#critical-question-5" id="toc-critical-question-5" class="nav-link" data-scroll-target="#critical-question-5"><span class="header-section-number">9.2</span> Critical Question:</a></li>
+  </ul></li>
+  <li><a href="#part-6-manual-did-calculation-for-wages" id="toc-part-6-manual-did-calculation-for-wages" class="nav-link" data-scroll-target="#part-6-manual-did-calculation-for-wages"><span class="header-section-number">10</span> Part 6: Manual DiD Calculation for Wages</a>
+  <ul class="collapse">
+  <li><a href="#critical-question-6" id="toc-critical-question-6" class="nav-link" data-scroll-target="#critical-question-6"><span class="header-section-number">10.1</span> Critical Question:</a></li>
+  </ul></li>
+  <li><a href="#part-7-regression-based-did-estimation-for-employment" id="toc-part-7-regression-based-did-estimation-for-employment" class="nav-link" data-scroll-target="#part-7-regression-based-did-estimation-for-employment"><span class="header-section-number">11</span> Part 7: Regression-Based DiD Estimation for Employment</a>
+  <ul class="collapse">
+  <li><a href="#critical-question-7" id="toc-critical-question-7" class="nav-link" data-scroll-target="#critical-question-7"><span class="header-section-number">11.1</span> Critical Question:</a></li>
+  </ul></li>
+  <li><a href="#part-8-regression-based-did-estimation-for-wages" id="toc-part-8-regression-based-did-estimation-for-wages" class="nav-link" data-scroll-target="#part-8-regression-based-did-estimation-for-wages"><span class="header-section-number">12</span> Part 8: Regression-Based DiD Estimation for Wages</a>
+  <ul class="collapse">
+  <li><a href="#critical-question-8" id="toc-critical-question-8" class="nav-link" data-scroll-target="#critical-question-8"><span class="header-section-number">12.1</span> Critical Question:</a></li>
+  </ul></li>
+  <li><a href="#part-9-tidy-regression-tables" id="toc-part-9-tidy-regression-tables" class="nav-link" data-scroll-target="#part-9-tidy-regression-tables"><span class="header-section-number">13</span> Part 9: Tidy Regression Tables</a></li>
+  <li><a href="#part-10-add-chain-controls" id="toc-part-10-add-chain-controls" class="nav-link" data-scroll-target="#part-10-add-chain-controls"><span class="header-section-number">14</span> Part 10: Add Chain Controls</a>
+  <ul class="collapse">
+  <li><a href="#why-are-we-doing-this-5" id="toc-why-are-we-doing-this-5" class="nav-link" data-scroll-target="#why-are-we-doing-this-5"><span class="header-section-number">14.1</span> Why are we doing this?</a></li>
+  <li><a href="#critical-question-9" id="toc-critical-question-9" class="nav-link" data-scroll-target="#critical-question-9"><span class="header-section-number">14.2</span> Critical Question:</a></li>
+  </ul></li>
+  <li><a href="#part-11-compare-manual-and-regression-did-estimates" id="toc-part-11-compare-manual-and-regression-did-estimates" class="nav-link" data-scroll-target="#part-11-compare-manual-and-regression-did-estimates"><span class="header-section-number">15</span> Part 11: Compare Manual and Regression DiD Estimates</a>
+  <ul class="collapse">
+  <li><a href="#critical-question-10" id="toc-critical-question-10" class="nav-link" data-scroll-target="#critical-question-10"><span class="header-section-number">15.1</span> Critical Question:</a></li>
+  </ul></li>
+  <li><a href="#assumptions-behind-did" id="toc-assumptions-behind-did" class="nav-link" data-scroll-target="#assumptions-behind-did"><span class="header-section-number">16</span> Assumptions behind DiD</a>
+  <ul class="collapse">
+  <li><a href="#critical-question-11" id="toc-critical-question-11" class="nav-link" data-scroll-target="#critical-question-11"><span class="header-section-number">16.1</span> Critical Question:</a></li>
+  </ul></li>
+  <li><a href="#conclusions" id="toc-conclusions" class="nav-link" data-scroll-target="#conclusions"><span class="header-section-number">17</span> Conclusions</a>
+  <ul class="collapse">
+  <li><a href="#employment" id="toc-employment" class="nav-link" data-scroll-target="#employment"><span class="header-section-number">17.1</span> Employment</a></li>
+  <li><a href="#critical-question-12" id="toc-critical-question-12" class="nav-link" data-scroll-target="#critical-question-12"><span class="header-section-number">17.2</span> Critical Question:</a></li>
+  </ul></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="Lab9.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Lab 9: Causal Inference with Difference-in-Differences</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Your Name </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="introduction" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> Introduction</h1>
+<p>In this lab, we will study a classic causal inference question:</p>
+<p><strong>Does raising the minimum wage reduce employment?</strong></p>
+<p>We will use a fast-food restaurant dataset modeled after the well-known Card and Krueger setting: - <strong>New Jersey (NJ)</strong> increased its minimum wage - <strong>Pennsylvania (PA)</strong> did not</p>
+<p>This gives us a natural treatment and control setting:</p>
+<ul>
+<li><strong>Treatment group</strong>: New Jersey restaurants</li>
+<li><strong>Control group</strong>: Pennsylvania restaurants</li>
+<li><strong>Before period</strong>: before the policy change</li>
+<li><strong>After period</strong>: after the policy change</li>
+</ul>
+<p>Our goals are:</p>
+<ol type="1">
+<li>Understand the logic of <strong>Difference-in-Differences (DiD)</strong></li>
+<li>Compare employment before and after the policy</li>
+<li>Compare wages before and after the policy</li>
+<li>Estimate the causal effect of the minimum wage increase on:
+<ul>
+<li><strong>employment</strong></li>
+<li><strong>wages</strong></li>
+</ul></li>
+</ol>
+<hr>
+</section>
+<section id="part-1-load-packages-and-data" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> Part 1: Load Packages and Data</h1>
+<section id="why-are-we-doing-this" class="level2" data-number="2.1">
+<h2 data-number="2.1" class="anchored" data-anchor-id="why-are-we-doing-this"><span class="header-section-number">2.1</span> Why are we doing this?</h2>
+<p>Before we can analyze the data, we need to: - load the packages we will use - read the CSV file - inspect the dataset - make sure variables are stored in the correct format</p>
+<p>Because your <code>fastfood.csv</code> file is in the <strong>same folder</strong> as the <code>.qmd</code> file, we can read it directly with <code>read.csv("fastfood.csv")</code>.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Set CRAN mirror so Quarto does not stop and ask for one during rendering</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="fu">options</span>(<span class="at">repos =</span> <span class="fu">c</span>(<span class="at">CRAN =</span> <span class="st">"https://cloud.r-project.org"</span>))</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># List the packages we need for this lab</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>required_packages <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"tidyverse"</span>, <span class="st">"broom"</span>)</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Check which packages are not installed yet</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>new_packages <span class="ot">&lt;-</span> required_packages[</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>  <span class="sc">!</span>(required_packages <span class="sc">%in%</span> <span class="fu">installed.packages</span>()[, <span class="st">"Package"</span>])</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Install any missing packages</span></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span>(<span class="fu">length</span>(new_packages)){</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">install.packages</span>(new_packages)</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="co"># Load all required packages</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="fu">lapply</span>(required_packages, library, <span class="at">character.only =</span> <span class="cn">TRUE</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[[1]]
+ [1] "lubridate" "forcats"   "stringr"   "dplyr"     "purrr"     "readr"    
+ [7] "tidyr"     "tibble"    "ggplot2"   "tidyverse" "stats"     "graphics" 
+[13] "grDevices" "utils"     "datasets"  "methods"   "base"     
+
+[[2]]
+ [1] "broom"     "lubridate" "forcats"   "stringr"   "dplyr"     "purrr"    
+ [7] "readr"     "tidyr"     "tibble"    "ggplot2"   "tidyverse" "stats"    
+[13] "graphics"  "grDevices" "utils"     "datasets"  "methods"   "base"     </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Read the CSV file from the same folder as this .qmd file</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>fastfood <span class="ot">&lt;-</span> <span class="fu">read.csv</span>(<span class="st">"fastfood.csv"</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Show the structure of the dataset</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">str</span>(fastfood)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>'data.frame':   100 obs. of  9 variables:
+ $ store_id: int  1 1 2 2 3 3 4 4 5 5 ...
+ $ state   : chr  "NJ" "NJ" "NJ" "NJ" ...
+ $ time    : chr  "Before" "After" "Before" "After" ...
+ $ fte     : int  23 23 21 21 23 23 20 21 21 22 ...
+ $ wage    : num  4.33 5.05 4.31 5.05 4.26 5.05 4.26 5.05 4.35 5.05 ...
+ $ chain   : chr  "Wendys" "Wendys" "KFC" "KFC" ...
+ $ treat   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ post    : int  0 1 0 1 0 1 0 1 0 1 ...
+ $ did     : int  0 1 0 1 0 1 0 1 0 1 ...</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Show the first 6 rows</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="fu">head</span>(fastfood)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>  store_id state   time fte wage  chain treat post did
+1        1    NJ Before  23 4.33 Wendys     1    0   0
+2        1    NJ  After  23 5.05 Wendys     1    1   1
+3        2    NJ Before  21 4.31    KFC     1    0   0
+4        2    NJ  After  21 5.05    KFC     1    1   1
+5        3    NJ Before  23 4.26   Roys     1    0   0
+6        3    NJ  After  23 5.05   Roys     1    1   1</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="part-2-understand-the-variables" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> Part 2: Understand the Variables</h1>
+<section id="why-are-we-doing-this-1" class="level2" data-number="3.1">
+<h2 data-number="3.1" class="anchored" data-anchor-id="why-are-we-doing-this-1"><span class="header-section-number">3.1</span> Why are we doing this?</h2>
+<p>Before running any model, we need to understand:</p>
+<ul>
+<li>what each variable means</li>
+<li>which variables are categorical</li>
+<li>which variables are numeric</li>
+<li>which variables we will use in the DiD setup</li>
+</ul>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert state, time, and chain into categorical variables (factors)</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>fastfood<span class="sc">$</span>state <span class="ot">&lt;-</span> <span class="fu">factor</span>(fastfood<span class="sc">$</span>state)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>fastfood<span class="sc">$</span>time  <span class="ot">&lt;-</span> <span class="fu">factor</span>(fastfood<span class="sc">$</span>time)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>fastfood<span class="sc">$</span>chain <span class="ot">&lt;-</span> <span class="fu">factor</span>(fastfood<span class="sc">$</span>chain)</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Check the structure again after converting variables</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="fu">str</span>(fastfood)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>'data.frame':   100 obs. of  9 variables:
+ $ store_id: int  1 1 2 2 3 3 4 4 5 5 ...
+ $ state   : Factor w/ 2 levels "NJ","PA": 1 1 1 1 1 1 1 1 1 1 ...
+ $ time    : Factor w/ 2 levels "After","Before": 2 1 2 1 2 1 2 1 2 1 ...
+ $ fte     : int  23 23 21 21 23 23 20 21 21 22 ...
+ $ wage    : num  4.33 5.05 4.31 5.05 4.26 5.05 4.26 5.05 4.35 5.05 ...
+ $ chain   : Factor w/ 4 levels "BK","KFC","Roys",..: 4 4 2 2 3 3 4 4 3 3 ...
+ $ treat   : int  1 1 1 1 1 1 1 1 1 1 ...
+ $ post    : int  0 1 0 1 0 1 0 1 0 1 ...
+ $ did     : int  0 1 0 1 0 1 0 1 0 1 ...</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Show summary statistics for all variables</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(fastfood)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>    store_id    state       time         fte             wage          chain   
+ Min.   : 1.0   NJ:50   After :50   Min.   :16.00   Min.   :4.250   BK    :24  
+ 1st Qu.:13.0   PA:50   Before:50   1st Qu.:18.00   1st Qu.:4.290   KFC   :24  
+ Median :25.5                       Median :20.00   Median :4.320   Roys  :22  
+ Mean   :25.5                       Mean   :20.02   Mean   :4.490   Wendys:30  
+ 3rd Qu.:38.0                       3rd Qu.:22.00   3rd Qu.:4.525              
+ Max.   :50.0                       Max.   :24.00   Max.   :5.050              
+     treat          post          did      
+ Min.   :0.0   Min.   :0.0   Min.   :0.00  
+ 1st Qu.:0.0   1st Qu.:0.0   1st Qu.:0.00  
+ Median :0.5   Median :0.5   Median :0.00  
+ Mean   :0.5   Mean   :0.5   Mean   :0.25  
+ 3rd Qu.:1.0   3rd Qu.:1.0   3rd Qu.:0.25  
+ Max.   :1.0   Max.   :1.0   Max.   :1.00  </code></pre>
+</div>
+</div>
+</section>
+<section id="key-variables-for-did" class="level2" data-number="3.2">
+<h2 data-number="3.2" class="anchored" data-anchor-id="key-variables-for-did"><span class="header-section-number">3.2</span> Key Variables for DiD</h2>
+<p>store_id: unique restaurant identifier state: NJ or PA time: Before or After fte: employment measured as full-time equivalent workers wage: hourly wage chain: restaurant chain treat: indicator for treatment group post: indicator for after period did: interaction term</p>
+</section>
+<section id="critical-question" class="level2" data-number="3.3">
+<h2 data-number="3.3" class="anchored" data-anchor-id="critical-question"><span class="header-section-number">3.3</span> Critical Question:</h2>
+<p>Why do we need both a treatment group and a control group? Why is it not enough to only look at New Jersey before and after the policy?</p>
+<p>If we only looked at New Jersey before and after the policy, we would not know whether any employment change was caused by the minimum wage increase or by something else happening over time. For example, employment could change because of seasonal demand, local economic conditions, or industry trends. The control group gives us a benchmark for what might have happened even without the policy.</p>
+</section>
+</section>
+<section id="check-for-missing-values" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> Check for missing values</h1>
+<p>Missing values can cause: errors in regressions dropped observations misleading results</p>
+<p>So we should always check for them early.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Count missing values in each column</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">colSums</span>(<span class="fu">is.na</span>(fastfood))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>store_id    state     time      fte     wage    chain    treat     post 
+       0        0        0        0        0        0        0        0 
+     did 
+       0 </code></pre>
+</div>
+</div>
+<section id="critical-question-1" class="level2" data-number="4.1">
+<h2 data-number="4.1" class="anchored" data-anchor-id="critical-question-1"><span class="header-section-number">4.1</span> Critical Question:</h2>
+<p>Why is it important to check for missing values before running a regression?</p>
+<p>If important variables have missing values, R may silently remove some rows from the analysis. This changes the sample size and can affect results. If the missing data are systematic rather than random, the regression results may also become biased.</p>
+</section>
+</section>
+<section id="create-the-did-variables" class="level1" data-number="5">
+<h1 data-number="5"><span class="header-section-number">5</span> Create the DiD variables</h1>
+<p>Even though the dataset already includes treat, post, and did, it is good practice to recreate them ourselves. This helps us understand how the design works.</p>
+<p>In a DiD setup: treat = 1 if the restaurant is in NJ, otherwise 0 post = 1 if the observation is after the policy, otherwise 0 did = treat * post</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Recreate treatment indicator: 1 for NJ, 0 for PA</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>fastfood<span class="sc">$</span>treat_new <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(fastfood<span class="sc">$</span>state <span class="sc">==</span> <span class="st">"NJ"</span>, <span class="dv">1</span>, <span class="dv">0</span>)</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Recreate post indicator: 1 for After, 0 for Before</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>fastfood<span class="sc">$</span>post_new <span class="ot">&lt;-</span> <span class="fu">ifelse</span>(fastfood<span class="sc">$</span>time <span class="sc">==</span> <span class="st">"After"</span>, <span class="dv">1</span>, <span class="dv">0</span>)</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Create the DiD interaction term</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>fastfood<span class="sc">$</span>did_new <span class="ot">&lt;-</span> fastfood<span class="sc">$</span>treat_new <span class="sc">*</span> fastfood<span class="sc">$</span>post_new</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Inspect the first 10 rows of the key variables</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>fastfood <span class="sc">%&gt;%</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(store_id, state, time, treat_new, post_new, did_new) <span class="sc">%&gt;%</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">head</span>(<span class="dv">10</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>   store_id state   time treat_new post_new did_new
+1         1    NJ Before         1        0       0
+2         1    NJ  After         1        1       1
+3         2    NJ Before         1        0       0
+4         2    NJ  After         1        1       1
+5         3    NJ Before         1        0       0
+6         3    NJ  After         1        1       1
+7         4    NJ Before         1        0       0
+8         4    NJ  After         1        1       1
+9         5    NJ Before         1        0       0
+10        5    NJ  After         1        1       1</code></pre>
+</div>
+</div>
+</section>
+<section id="critical-question-2" class="level1" data-number="6">
+<h1 data-number="6"><span class="header-section-number">6</span> Critical Question</h1>
+<p>In this lab, which observations have did_new = 1?</p>
+<p>Only observations that are both: in New Jersey in the After period These are the treated observations after the policy change.</p>
+</section>
+<section id="part-3-descriptive-analysis" class="level1" data-number="7">
+<h1 data-number="7"><span class="header-section-number">7</span> Part 3: Descriptive Analysis</h1>
+<section id="why-are-we-doing-this-2" class="level2" data-number="7.1">
+<h2 data-number="7.1" class="anchored" data-anchor-id="why-are-we-doing-this-2"><span class="header-section-number">7.1</span> Why are we doing this?</h2>
+<p>Before any regression, we want to build intuition by looking at: average employment by state and time average wages by state and time</p>
+<p>This helps us understand the raw patterns in the data.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute average employment and wage by state and time</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>group_summary <span class="ot">&lt;-</span> fastfood <span class="sc">%&gt;%</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(state, time) <span class="sc">%&gt;%</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_fte =</span> <span class="fu">mean</span>(fte),</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    <span class="at">mean_wage =</span> <span class="fu">mean</span>(wage),</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>    <span class="at">n =</span> <span class="fu">n</span>(),</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    <span class="at">.groups =</span> <span class="st">"drop"</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Display the summary table</span></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>group_summary</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 4 × 5
+  state time   mean_fte mean_wage     n
+  &lt;fct&gt; &lt;fct&gt;     &lt;dbl&gt;     &lt;dbl&gt; &lt;int&gt;
+1 NJ    After      20.7      5.05    25
+2 NJ    Before     20.1      4.29    25
+3 PA    After      19.4      4.32    25
+4 PA    Before     19.8      4.30    25</code></pre>
+</div>
+</div>
+</section>
+<section id="critical-question-3" class="level2" data-number="7.2">
+<h2 data-number="7.2" class="anchored" data-anchor-id="critical-question-3"><span class="header-section-number">7.2</span> Critical Question</h2>
+<p>If average wages increase much more in NJ than in PA, what does that suggest?</p>
+<p>It suggests that the policy likely affected wages in NJ, since NJ was the treated state. This is exactly what we would expect if the minimum wage increase was binding and had a real effect on pay.</p>
+</section>
+</section>
+<section id="part-4-visualize-employment-and-wages" class="level1" data-number="8">
+<h1 data-number="8"><span class="header-section-number">8</span> Part 4: Visualize Employment and Wages</h1>
+<section id="why-are-we-doing-this-3" class="level2" data-number="8.1">
+<h2 data-number="8.1" class="anchored" data-anchor-id="why-are-we-doing-this-3"><span class="header-section-number">8.1</span> Why are we doing this?</h2>
+<p>Plots make the before-and-after patterns easier to see.</p>
+<p>We will create: - an employment plot - a wage plot</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot average employment by state and time</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>fastfood <span class="sc">%&gt;%</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(state, time) <span class="sc">%&gt;%</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_fte =</span> <span class="fu">mean</span>(fte), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> time, <span class="at">y =</span> mean_fte, <span class="at">group =</span> state, <span class="at">linetype =</span> state)) <span class="sc">+</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Average Employment by State and Time"</span>,</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Time Period"</span>,</span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Average FTE Employment"</span></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lab9_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot average wage by state and time</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>fastfood <span class="sc">%&gt;%</span></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(state, time) <span class="sc">%&gt;%</span></span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_wage =</span> <span class="fu">mean</span>(wage), <span class="at">.groups =</span> <span class="st">"drop"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">ggplot</span>(<span class="fu">aes</span>(<span class="at">x =</span> time, <span class="at">y =</span> mean_wage, <span class="at">group =</span> state, <span class="at">linetype =</span> state)) <span class="sc">+</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_line</span>(<span class="at">size =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_point</span>(<span class="at">size =</span> <span class="dv">2</span>) <span class="sc">+</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>    <span class="at">title =</span> <span class="st">"Average Wage by State and Time"</span>,</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>    <span class="at">x =</span> <span class="st">"Time Period"</span>,</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>    <span class="at">y =</span> <span class="st">"Average Hourly Wage"</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>  )</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="Lab9_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid figure-img" width="672"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="critical-question-4" class="level2" data-number="8.2">
+<h2 data-number="8.2" class="anchored" data-anchor-id="critical-question-4"><span class="header-section-number">8.2</span> Critical Question</h2>
+<p>In a DiD design, what would we expect the wage plot to look like if the treatment had a strong effect on wages?</p>
+<p>We would expect the NJ line to rise noticeably after the policy, while the PA line would remain relatively flat or change much less. That would show a larger change in wages for the treated group.</p>
+</section>
+</section>
+<section id="part-5-manual-did-calculation-for-employment" class="level1" data-number="9">
+<h1 data-number="9"><span class="header-section-number">9</span> Part 5: Manual DiD Calculation for Employment</h1>
+<section id="why-are-we-doing-this-4" class="level2" data-number="9.1">
+<h2 data-number="9.1" class="anchored" data-anchor-id="why-are-we-doing-this-4"><span class="header-section-number">9.1</span> Why are we doing this?</h2>
+<p>Before running a regression, we can calculate the DiD estimate manually using the group means. This helps us understand the logic of the DiD estimator. The formula is: DiD = (Y_NJ,After - Y_NJ,Before) - (Y_PA,After - Y_PA,Before)</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute average employment in each group</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>employment_means <span class="ot">&lt;-</span> fastfood <span class="sc">%&gt;%</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(state, time) <span class="sc">%&gt;%</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_fte =</span> <span class="fu">mean</span>(fte), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>employment_means</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 4 × 3
+  state time   mean_fte
+  &lt;fct&gt; &lt;fct&gt;     &lt;dbl&gt;
+1 NJ    After      20.7
+2 NJ    Before     20.1
+3 PA    After      19.4
+4 PA    Before     19.8</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract the four means needed for DiD</span></span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a>nj_before_fte <span class="ot">&lt;-</span> employment_means <span class="sc">%&gt;%</span></span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(state <span class="sc">==</span> <span class="st">"NJ"</span>, time <span class="sc">==</span> <span class="st">"Before"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(mean_fte)</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>nj_after_fte <span class="ot">&lt;-</span> employment_means <span class="sc">%&gt;%</span></span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(state <span class="sc">==</span> <span class="st">"NJ"</span>, time <span class="sc">==</span> <span class="st">"After"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(mean_fte)</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>pa_before_fte <span class="ot">&lt;-</span> employment_means <span class="sc">%&gt;%</span></span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(state <span class="sc">==</span> <span class="st">"PA"</span>, time <span class="sc">==</span> <span class="st">"Before"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(mean_fte)</span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a>pa_after_fte <span class="ot">&lt;-</span> employment_means <span class="sc">%&gt;%</span></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(state <span class="sc">==</span> <span class="st">"PA"</span>, time <span class="sc">==</span> <span class="st">"After"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(mean_fte)</span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute within-state changes</span></span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>nj_change_fte <span class="ot">&lt;-</span> nj_after_fte <span class="sc">-</span> nj_before_fte</span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>pa_change_fte <span class="ot">&lt;-</span> pa_after_fte <span class="sc">-</span> pa_before_fte</span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute the DiD estimate</span></span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a>did_fte_manual <span class="ot">&lt;-</span> nj_change_fte <span class="sc">-</span> pa_change_fte</span>
+<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a><span class="co"># Print the results</span></span>
+<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a>nj_before_fte</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 20.08</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>nj_after_fte</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 20.72</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>pa_before_fte</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 19.84</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>pa_after_fte</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 19.44</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>nj_change_fte</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.64</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>pa_change_fte</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] -0.4</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a>did_fte_manual</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 1.04</code></pre>
+</div>
+</div>
+</section>
+<section id="critical-question-5" class="level2" data-number="9.2">
+<h2 data-number="9.2" class="anchored" data-anchor-id="critical-question-5"><span class="header-section-number">9.2</span> Critical Question:</h2>
+<p>Why do we subtract PA’s change from NJ’s change?</p>
+<p>Because PA represents the untreated comparison group. Its change over time captures general time trends that may have affected employment regardless of the policy. By subtracting PA’s change, we isolate the extra change associated with treatment.</p>
+</section>
+</section>
+<section id="part-6-manual-did-calculation-for-wages" class="level1" data-number="10">
+<h1 data-number="10"><span class="header-section-number">10</span> Part 6: Manual DiD Calculation for Wages</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb35"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb35-1"><a href="#cb35-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute average wages in each group</span></span>
+<span id="cb35-2"><a href="#cb35-2" aria-hidden="true" tabindex="-1"></a>wage_means <span class="ot">&lt;-</span> fastfood <span class="sc">%&gt;%</span></span>
+<span id="cb35-3"><a href="#cb35-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(state, time) <span class="sc">%&gt;%</span></span>
+<span id="cb35-4"><a href="#cb35-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">mean_wage =</span> <span class="fu">mean</span>(wage), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb35-5"><a href="#cb35-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb35-6"><a href="#cb35-6" aria-hidden="true" tabindex="-1"></a>wage_means</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 4 × 3
+  state time   mean_wage
+  &lt;fct&gt; &lt;fct&gt;      &lt;dbl&gt;
+1 NJ    After       5.05
+2 NJ    Before      4.29
+3 PA    After       4.32
+4 PA    Before      4.30</code></pre>
+</div>
+</div>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb37"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb37-1"><a href="#cb37-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract the four means needed for wage DiD</span></span>
+<span id="cb37-2"><a href="#cb37-2" aria-hidden="true" tabindex="-1"></a>nj_before_wage <span class="ot">&lt;-</span> wage_means <span class="sc">%&gt;%</span></span>
+<span id="cb37-3"><a href="#cb37-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(state <span class="sc">==</span> <span class="st">"NJ"</span>, time <span class="sc">==</span> <span class="st">"Before"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb37-4"><a href="#cb37-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(mean_wage)</span>
+<span id="cb37-5"><a href="#cb37-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-6"><a href="#cb37-6" aria-hidden="true" tabindex="-1"></a>nj_after_wage <span class="ot">&lt;-</span> wage_means <span class="sc">%&gt;%</span></span>
+<span id="cb37-7"><a href="#cb37-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(state <span class="sc">==</span> <span class="st">"NJ"</span>, time <span class="sc">==</span> <span class="st">"After"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb37-8"><a href="#cb37-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(mean_wage)</span>
+<span id="cb37-9"><a href="#cb37-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-10"><a href="#cb37-10" aria-hidden="true" tabindex="-1"></a>pa_before_wage <span class="ot">&lt;-</span> wage_means <span class="sc">%&gt;%</span></span>
+<span id="cb37-11"><a href="#cb37-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(state <span class="sc">==</span> <span class="st">"PA"</span>, time <span class="sc">==</span> <span class="st">"Before"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb37-12"><a href="#cb37-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(mean_wage)</span>
+<span id="cb37-13"><a href="#cb37-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-14"><a href="#cb37-14" aria-hidden="true" tabindex="-1"></a>pa_after_wage <span class="ot">&lt;-</span> wage_means <span class="sc">%&gt;%</span></span>
+<span id="cb37-15"><a href="#cb37-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(state <span class="sc">==</span> <span class="st">"PA"</span>, time <span class="sc">==</span> <span class="st">"After"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb37-16"><a href="#cb37-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pull</span>(mean_wage)</span>
+<span id="cb37-17"><a href="#cb37-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-18"><a href="#cb37-18" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute within-state changes</span></span>
+<span id="cb37-19"><a href="#cb37-19" aria-hidden="true" tabindex="-1"></a>nj_change_wage <span class="ot">&lt;-</span> nj_after_wage <span class="sc">-</span> nj_before_wage</span>
+<span id="cb37-20"><a href="#cb37-20" aria-hidden="true" tabindex="-1"></a>pa_change_wage <span class="ot">&lt;-</span> pa_after_wage <span class="sc">-</span> pa_before_wage</span>
+<span id="cb37-21"><a href="#cb37-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-22"><a href="#cb37-22" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute the DiD estimate for wages</span></span>
+<span id="cb37-23"><a href="#cb37-23" aria-hidden="true" tabindex="-1"></a>did_wage_manual <span class="ot">&lt;-</span> nj_change_wage <span class="sc">-</span> pa_change_wage</span>
+<span id="cb37-24"><a href="#cb37-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb37-25"><a href="#cb37-25" aria-hidden="true" tabindex="-1"></a><span class="co"># Print the results</span></span>
+<span id="cb37-26"><a href="#cb37-26" aria-hidden="true" tabindex="-1"></a>nj_before_wage</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 4.2888</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb39"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb39-1"><a href="#cb39-1" aria-hidden="true" tabindex="-1"></a>nj_after_wage</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 5.05</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb41"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb41-1"><a href="#cb41-1" aria-hidden="true" tabindex="-1"></a>pa_before_wage</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 4.298</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a>pa_after_wage</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 4.3244</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb45"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb45-1"><a href="#cb45-1" aria-hidden="true" tabindex="-1"></a>nj_change_wage</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.7612</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb47"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb47-1"><a href="#cb47-1" aria-hidden="true" tabindex="-1"></a>pa_change_wage</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.0264</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb49"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb49-1"><a href="#cb49-1" aria-hidden="true" tabindex="-1"></a>did_wage_manual</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.7348</code></pre>
+</div>
+</div>
+<section id="critical-question-6" class="level2" data-number="10.1">
+<h2 data-number="10.1" class="anchored" data-anchor-id="critical-question-6"><span class="header-section-number">10.1</span> Critical Question:</h2>
+<p>Suppose wage DiD is clearly positive, but employment DiD is close to zero or positive. What does that suggest?</p>
+<p>It suggests that the minimum wage increase raised wages without causing a corresponding decrease in employment. This would go against the simplest version of the standard competitive labor market prediction.</p>
+</section>
+</section>
+<section id="part-7-regression-based-did-estimation-for-employment" class="level1" data-number="11">
+<h1 data-number="11"><span class="header-section-number">11</span> Part 7: Regression-Based DiD Estimation for Employment</h1>
+<p>The manual DiD estimate is useful, but regression gives us a standard, formal framework. The formula is: Y = β0 + β1<em>treat + β2</em>post + β3*did + ε</p>
+<p>Where: - Y is the outcome (employment or wages) - treat is the treatment group indicator - post is the after period indicator - did is the interaction term (treat * post)</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb51"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb51-1"><a href="#cb51-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Run the DiD regression for employment</span></span>
+<span id="cb51-2"><a href="#cb51-2" aria-hidden="true" tabindex="-1"></a>model_fte <span class="ot">&lt;-</span> <span class="fu">lm</span>(fte <span class="sc">~</span> treat_new <span class="sc">+</span> post_new <span class="sc">+</span> did_new, <span class="at">data =</span> fastfood)</span>
+<span id="cb51-3"><a href="#cb51-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb51-4"><a href="#cb51-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Show regression output</span></span>
+<span id="cb51-5"><a href="#cb51-5" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_fte)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+lm(formula = fte ~ treat_new + post_new + did_new, data = fastfood)
+
+Residuals:
+   Min     1Q Median     3Q    Max 
+ -3.72  -1.72   0.16   1.56   3.56 
+
+Coefficients:
+            Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)  19.8400     0.4155  47.746   &lt;2e-16 ***
+treat_new     0.2400     0.5877   0.408    0.684    
+post_new     -0.4000     0.5877  -0.681    0.498    
+did_new       1.0400     0.8311   1.251    0.214    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+Residual standard error: 2.078 on 96 degrees of freedom
+Multiple R-squared:  0.04945,   Adjusted R-squared:  0.01975 
+F-statistic: 1.665 on 3 and 96 DF,  p-value: 0.1797</code></pre>
+</div>
+</div>
+<section id="critical-question-7" class="level2" data-number="11.1">
+<h2 data-number="11.1" class="anchored" data-anchor-id="critical-question-7"><span class="header-section-number">11.1</span> Critical Question:</h2>
+<p>In the employment regression, which coefficient should we focus on if we want the estimated causal effect of the policy?</p>
+<p>The coefficient on did_new, because it measures the change in NJ after the policy relative to the change in PA over the same period.</p>
+</section>
+</section>
+<section id="part-8-regression-based-did-estimation-for-wages" class="level1" data-number="12">
+<h1 data-number="12"><span class="header-section-number">12</span> Part 8: Regression-Based DiD Estimation for Wages</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb53"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb53-1"><a href="#cb53-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Run the DiD regression for wages</span></span>
+<span id="cb53-2"><a href="#cb53-2" aria-hidden="true" tabindex="-1"></a>model_wage <span class="ot">&lt;-</span> <span class="fu">lm</span>(wage <span class="sc">~</span> treat_new <span class="sc">+</span> post_new <span class="sc">+</span> did_new, <span class="at">data =</span> fastfood)</span>
+<span id="cb53-3"><a href="#cb53-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb53-4"><a href="#cb53-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Show regression output</span></span>
+<span id="cb53-5"><a href="#cb53-5" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_wage)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+lm(formula = wage ~ treat_new + post_new + did_new, data = fastfood)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-0.0480 -0.0144  0.0000  0.0114  0.0612 
+
+Coefficients:
+             Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)  4.298000   0.004391 978.758  &lt; 2e-16 ***
+treat_new   -0.009200   0.006210  -1.481    0.142    
+post_new     0.026400   0.006210   4.251 4.93e-05 ***
+did_new      0.734800   0.008783  83.666  &lt; 2e-16 ***
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+Residual standard error: 0.02196 on 96 degrees of freedom
+Multiple R-squared:  0.9956,    Adjusted R-squared:  0.9955 
+F-statistic:  7232 on 3 and 96 DF,  p-value: &lt; 2.2e-16</code></pre>
+</div>
+</div>
+<section id="critical-question-8" class="level2" data-number="12.1">
+<h2 data-number="12.1" class="anchored" data-anchor-id="critical-question-8"><span class="header-section-number">12.1</span> Critical Question:</h2>
+<p>Why is it useful to estimate the wage effect as well as the employment effect?</p>
+<p>Because if the minimum wage policy truly changed labor market conditions, we should first see evidence that wages increased in the treated state. Wage results help verify that the treatment actually affected the intended variable. If wages did not change, then we would not expect to see any employment effect either.</p>
+</section>
+</section>
+<section id="part-9-tidy-regression-tables" class="level1" data-number="13">
+<h1 data-number="13"><span class="header-section-number">13</span> Part 9: Tidy Regression Tables</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb55"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb55-1"><a href="#cb55-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create a tidy table for the employment model</span></span>
+<span id="cb55-2"><a href="#cb55-2" aria-hidden="true" tabindex="-1"></a><span class="fu">tidy</span>(model_fte)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 4 × 5
+  term        estimate std.error statistic  p.value
+  &lt;chr&gt;          &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;
+1 (Intercept)   19.8       0.416    47.7   1.07e-68
+2 treat_new      0.240     0.588     0.408 6.84e- 1
+3 post_new      -0.400     0.588    -0.681 4.98e- 1
+4 did_new        1.04      0.831     1.25  2.14e- 1</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb57"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb57-1"><a href="#cb57-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create a tidy table for the wage model</span></span>
+<span id="cb57-2"><a href="#cb57-2" aria-hidden="true" tabindex="-1"></a><span class="fu">tidy</span>(model_wage)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code># A tibble: 4 × 5
+  term        estimate std.error statistic   p.value
+  &lt;chr&gt;          &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;
+1 (Intercept)  4.30      0.00439    979.   8.95e-194
+2 treat_new   -0.00920   0.00621     -1.48 1.42e-  1
+3 post_new     0.0264    0.00621      4.25 4.93e-  5
+4 did_new      0.735     0.00878     83.7  1.63e- 91</code></pre>
+</div>
+</div>
+</section>
+<section id="part-10-add-chain-controls" class="level1" data-number="14">
+<h1 data-number="14"><span class="header-section-number">14</span> Part 10: Add Chain Controls</h1>
+<section id="why-are-we-doing-this-5" class="level2" data-number="14.1">
+<h2 data-number="14.1" class="anchored" data-anchor-id="why-are-we-doing-this-5"><span class="header-section-number">14.1</span> Why are we doing this?</h2>
+<p>Adding controls can help improve the precision of our estimates and account for any differences in chain distribution between states. For example, if NJ has more McDonald’s locations and McDonald’s pays higher wages, that could confound our estimates. By controlling for chain, we can better isolate the effect of the minimum wage policy.</p>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb59"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb59-1"><a href="#cb59-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Employment model with chain controls</span></span>
+<span id="cb59-2"><a href="#cb59-2" aria-hidden="true" tabindex="-1"></a>model_fte_controls <span class="ot">&lt;-</span> <span class="fu">lm</span>(fte <span class="sc">~</span> treat_new <span class="sc">+</span> post_new <span class="sc">+</span> did_new <span class="sc">+</span> chain, <span class="at">data =</span> fastfood)</span>
+<span id="cb59-3"><a href="#cb59-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-4"><a href="#cb59-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Wage model with chain controls</span></span>
+<span id="cb59-5"><a href="#cb59-5" aria-hidden="true" tabindex="-1"></a>model_wage_controls <span class="ot">&lt;-</span> <span class="fu">lm</span>(wage <span class="sc">~</span> treat_new <span class="sc">+</span> post_new <span class="sc">+</span> did_new <span class="sc">+</span> chain, <span class="at">data =</span> fastfood)</span>
+<span id="cb59-6"><a href="#cb59-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb59-7"><a href="#cb59-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Show summaries</span></span>
+<span id="cb59-8"><a href="#cb59-8" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_fte_controls)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+lm(formula = fte ~ treat_new + post_new + did_new + chain, data = fastfood)
+
+Residuals:
+    Min      1Q  Median      3Q     Max 
+-4.2096 -1.2297 -0.1565  1.5408  3.6560 
+
+Coefficients:
+            Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)  20.6096     0.4776  43.151  &lt; 2e-16 ***
+treat_new     0.7725     0.5617   1.375    0.172    
+post_new     -0.4000     0.5383  -0.743    0.459    
+did_new       1.0400     0.7613   1.366    0.175    
+chainKFC     -2.5629     0.5870  -4.366 3.27e-05 ***
+chainRoys    -0.7321     0.5943  -1.232    0.221    
+chainWendys  -0.8656     0.5428  -1.595    0.114    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+Residual standard error: 1.903 on 93 degrees of freedom
+Multiple R-squared:  0.2273,    Adjusted R-squared:  0.1774 
+F-statistic: 4.559 on 6 and 93 DF,  p-value: 0.0004258</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb61"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb61-1"><a href="#cb61-1" aria-hidden="true" tabindex="-1"></a><span class="fu">summary</span>(model_wage_controls)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>
+Call:
+lm(formula = wage ~ treat_new + post_new + did_new + chain, data = fastfood)
+
+Residuals:
+      Min        1Q    Median        3Q       Max 
+-0.048015 -0.011753 -0.000671  0.010842  0.060529 
+
+Coefficients:
+             Estimate Std. Error t value Pr(&gt;|t|)    
+(Intercept)  4.298015   0.005568 771.863  &lt; 2e-16 ***
+treat_new   -0.009687   0.006549  -1.479    0.142    
+post_new     0.026400   0.006276   4.206 5.97e-05 ***
+did_new      0.734800   0.008876  82.788  &lt; 2e-16 ***
+chainKFC     0.001144   0.006843   0.167    0.868    
+chainRoys    0.003423   0.006929   0.494    0.622    
+chainWendys -0.002661   0.006328  -0.421    0.675    
+---
+Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
+
+Residual standard error: 0.02219 on 93 degrees of freedom
+Multiple R-squared:  0.9956,    Adjusted R-squared:  0.9954 
+F-statistic:  3541 on 6 and 93 DF,  p-value: &lt; 2.2e-16</code></pre>
+</div>
+</div>
+</section>
+<section id="critical-question-9" class="level2" data-number="14.2">
+<h2 data-number="14.2" class="anchored" data-anchor-id="critical-question-9"><span class="header-section-number">14.2</span> Critical Question:</h2>
+<p>Why might controlling for chain be helpful in this setting?</p>
+<p>Some chains may systematically pay higher wages or employ more workers than others. If chain composition differs between states, then failing to control for chain could mix treatment effects with chain-specific differences.</p>
+</section>
+</section>
+<section id="part-11-compare-manual-and-regression-did-estimates" class="level1" data-number="15">
+<h1 data-number="15"><span class="header-section-number">15</span> Part 11: Compare Manual and Regression DiD Estimates</h1>
+<div class="cell">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb63"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb63-1"><a href="#cb63-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Extract the regression DiD coefficients</span></span>
+<span id="cb63-2"><a href="#cb63-2" aria-hidden="true" tabindex="-1"></a><span class="fu">coef</span>(model_fte)[<span class="st">"did_new"</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>did_new 
+   1.04 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb65"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb65-1"><a href="#cb65-1" aria-hidden="true" tabindex="-1"></a><span class="fu">coef</span>(model_wage)[<span class="st">"did_new"</span>]</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>did_new 
+ 0.7348 </code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb67"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb67-1"><a href="#cb67-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Show the manual DiD estimates again</span></span>
+<span id="cb67-2"><a href="#cb67-2" aria-hidden="true" tabindex="-1"></a>did_fte_manual</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 1.04</code></pre>
+</div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb69"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb69-1"><a href="#cb69-1" aria-hidden="true" tabindex="-1"></a>did_wage_manual</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>[1] 0.7348</code></pre>
+</div>
+</div>
+<p>In a simple DiD setup with no additional controls, the manual DiD estimate should equal the regression coefficient on the interaction term.</p>
+<section id="critical-question-10" class="level2" data-number="15.1">
+<h2 data-number="15.1" class="anchored" data-anchor-id="critical-question-10"><span class="header-section-number">15.1</span> Critical Question:</h2>
+<p>Why do the manual DiD estimate and the regression interaction coefficient match here?</p>
+<p>Because the regression is just a formal way of expressing the same group-mean comparison. In the basic two-group, two-period DiD setup, the interaction coefficient reproduces the same difference-in-differences calculation.</p>
+</section>
+</section>
+<section id="assumptions-behind-did" class="level1" data-number="16">
+<h1 data-number="16"><span class="header-section-number">16</span> Assumptions behind DiD</h1>
+<ul>
+<li>Parallel trends: In the absence of treatment, the average outcomes for treated and control groups would have followed parallel paths over time.</li>
+<li>No spillovers: The treatment in NJ does not affect outcomes in PA.</li>
+<li>Stable composition: The set of restaurants in each state does not change systematically over time in a way that is related to the treatment.</li>
+</ul>
+<p>In this dataset, we only have one before period and one after period, so we cannot directly test parallel trends well. Because with only one pre-treatment observation, we cannot observe an actual trend before treatment. We can compare levels before treatment, but we cannot see whether the two states were moving similarly over time before the policy.</p>
+<section id="critical-question-11" class="level2" data-number="16.1">
+<h2 data-number="16.1" class="anchored" data-anchor-id="critical-question-11"><span class="header-section-number">16.1</span> Critical Question:</h2>
+<p>If NJ and PA were already on very different employment trends before treatment, how would that affect our DiD estimate?</p>
+<p>Then the DiD estimate might incorrectly attribute those pre-existing trend differences to the policy. In that case, the causal interpretation would be weaker.</p>
+</section>
+</section>
+<section id="conclusions" class="level1" data-number="17">
+<h1 data-number="17"><span class="header-section-number">17</span> Conclusions</h1>
+<section id="employment" class="level2" data-number="17.1">
+<h2 data-number="17.1" class="anchored" data-anchor-id="employment"><span class="header-section-number">17.1</span> Employment</h2>
+<p>The employment DiD estimate tells us whether employment changed more in NJ than in PA after the policy. If positive: employment rose more in NJ If near zero: employment did not fall relative to PA If negative: employment fell more in NJ ## Wages The wage DiD estimate tells us whether wages changed more in NJ than in PA. If positive: wages rose more in NJ This is what we expect if the policy affected wages</p>
+</section>
+<section id="critical-question-12" class="level2" data-number="17.2">
+<h2 data-number="17.2" class="anchored" data-anchor-id="critical-question-12"><span class="header-section-number">17.2</span> Critical Question:</h2>
+<p>Does a positive DiD coefficient automatically prove causality?</p>
+<p>Not automatically. It supports a causal interpretation only if the DiD assumptions are credible, especially parallel trends and the absence of major confounding shocks that affected the treated group differently.</p>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

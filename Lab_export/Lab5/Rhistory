@@ -1,0 +1,512 @@
+ridge.mod = glmnet(x,y,alpha=0,lambda=100*cv.out$lambda.min)
+coef(ridge.mod)
+sqrt(sum(coef(ridge.mod)^2))
+set.seed(1)
+x = model.matrix(medv~.,Boston[,-1])
+y = Boston$medv
+grid = 10^seq(10,-2,length=100)
+cv.out = cv.glmnet(x,y,alpha=1,lambda=grid)
+lasso.fit.1 = glmnet(x,y,alpha=1,lambda=cv.out$lambda.min)
+coef(lasso.fit.1)
+sqrt(sum(abs(coef(lasso.fit.1))))
+# Increase penalty
+lasso.fit.2 = glmnet(x,y,alpha=1,lambda=100*cv.out$lambda.min)
+sum(abs(coef(lasso.fit.1)))
+# Increase penalty
+lasso.fit.2 = glmnet(x,y,alpha=1,lambda=100*cv.out$lambda.min)
+coef(lasso.fit.2)
+sum(abs(coef(lasso.fit.2)))
+# Increase penalty
+lasso.fit.2 = glmnet(x,y,alpha=1,lambda=1000*cv.out$lambda.min)
+coef(lasso.fit.2)
+sum(abs(coef(lasso.fit.2)))
+mean.cv.errors = apply(cv.errors,2,mean)
+std.cv.errors = apply(cv.errors,2,std)
+?sd
+sd.cv.errors = apply(cv.errors,2,sd)
+print(mean.cv.errors)
+print(sd.cv.errors)
+sd.cv.errors = apply(cv.errors,2,sd)
+print(mean.cv.errors)
+print(sd.cv.errors)
+cv.errors
+?lm
+boot.fn(sample(nrow(Boston),nrow(Boston),replace=TRUE))
+# Bootstrap
+summary(lm.fit)
+boot.fn = function(index){
+return(coef(lm(medv~rm+lstat,data=Boston,subset=index)))
+}
+boot.fn(sample(nrow(Boston),nrow(Boston),replace=TRUE))
+install.packages("boot")
+# Bootstrap
+library(boot)
+summary(lm.fit)
+boot.fn = function(data,index){
+return(coef(lm(medv~rm+lstat,data=data,subset=index)))
+}
+boot.fn(Boston,sample(nrow(Boston),nrow(Boston),replace=TRUE))
+boot(Boston,boot.fn,1000)
+?boot
+coef.boot = matrix(NA,nrow(Boston),2)
+for (i in 1:1000){
+coefs = boot.fn(Boston,sample(nrow(Boston),nrow(Boston),replace=TRUE))
+coef.boot[1] = coefs[2]
+coef.boot[2] = coefs[3]
+}
+plot(coef.boot[1],coef.boot[2])
+boot(Boston,boot.fn,1000)
+coef.boot = matrix(NA,nrow(Boston),2)
+for (i in 1:1000){
+coefs = boot.fn(Boston,sample(nrow(Boston),nrow(Boston),replace=TRUE))
+coef.boot[i,1] = coefs[2]
+coef.boot[i,2] = coefs[3]
+}
+plot(coef.boot[,1],coef.boot[,2])
+boot.fn(Boston,sample(nrow(Boston),nrow(Boston),replace=TRUE))
+boot.fn(Boston,sample(nrow(Boston),nrow(Boston),replace=TRUE))[1]
+boot.fn(Boston,sample(nrow(Boston),nrow(Boston),replace=TRUE))[2]
+boot.fn(Boston,sample(nrow(Boston),nrow(Boston),replace=TRUE))[3]
+coef.boot = matrix(NA,nrow(Boston),2)
+for (i in 1:1000){
+coefs = boot.fn(Boston,sample(nrow(Boston),nrow(Boston),replace=TRUE))
+coef.boot[i,1] = coefs[2]
+coef.boot[i,2] = coefs[3]
+}
+plot(coef.boot[,1],coef.boot[,2],xlab="rm coefficient",ylab="lstat coefficient")
+# Model Accuracy
+lm.fit = lm(medv~lstat+rm,data=Boston)
+summary(lm.fit)
+boot(Boston,boot.fn,1000)
+par(lwd=3)# set the line width lwd to be thicker (3) for easier visualization
+### Descriptive Statistics
+x=rnorm(10,20,1.5) # Draw 10 samples from a normal distribution with mean 20 sd 1.5
+hist(x)
+par(lwd=3)# set the line width lwd to be thicker (3) for easier visualization
+### Descriptive Statistics
+x=rnorm(20,20,1.5) # Draw 10 samples from a normal distribution with mean 20 sd 1.5
+hist(x)
+### Descriptive Statistics
+x=rnorm(20,20,1.5) # Draw 10 samples from a normal distribution with mean 20 sd 1.5
+hist(x)
+mean(x)
+sd(x)
+### Plotting a normal distribution
+# Example when the variation is the same in the two populations
+N=100000 # fish population in either site
+Fish1=rnorm(N,20,1.5) #suppose the mean is 20, and standard deviation is 1.5
+Fish2=rnorm(N,22,1.5)
+plot(density(Fish1))# show the probability distribution
+lines(density(Fish2),col=2,lty=2)
+plot(ecdf(Fish1))# show the cumulative distribution
+lines(ecdf(Fish2),col=2,lty=2)
+# Example when the variation is different in the two populations
+N=100000
+Fish1=rnorm(N,20,3)
+Fish2=rnorm(N,22,1.5)
+plot(density(Fish2),col=2,lty=2,xlim=c(14,29))
+lines(density(Fish1),col=1)
+plot(ecdf(Fish1))
+lines(ecdf(Fish2),col=2,lty=2)
+# Histogram
+x=rnorm(20,20,1.5) # Draw 20 samples from a normal distribution with mean 20 sd 1.5
+hist(x)
+# Histogram
+x=rnorm(20,20,1.5) # Draw 20 samples from a normal distribution with mean 20 sd 1.5
+hist(x)
+# Histogram
+x=rnorm(20,20,1.5) # Draw 20 samples from a normal distribution with mean 20 sd 1.5
+hist(x)
+# Histogram
+x=rnorm(20,20,1.5) # Draw 20 samples from a normal distribution with mean 20 sd 1.5
+hist(x)
+ci_low = rep(NA,100)
+ci_up = rep(NA,100)
+for(i in 1:100){
+x = rnorm(20,20,1.5)
+ci_low[i] = mean(x)-1.96*sd(x)
+ci_up[i] = mean(x)+1.96*sd(x)
+}
+ci_low
+ci_up
+ci_low = rep(NA,100)
+ci_up = rep(NA,100)
+for(i in 1:100){
+x = rnorm(20,20,1.5)
+ci_low[i] = mean(x)-1.96*sd(x)
+ci_up[i] = mean(x)+1.96*sd(x)
+}
+?sd
+ci_low = rep(NA,100)
+ci_up = rep(NA,100)
+for(i in 1:100){
+x = rnorm(20,20,1.5)
+ci_low[i] = mean(x)-1.96*sd(x)
+sd(x)
+ci_up[i] = mean(x)+1.96*sd(x)
+}
+x = rnorm(20,20,1.5)
+ci_low[i] = mean(x)-1.96*sd(x)
+sd(x)
+?se
+?stderr
+# Confidence interval
+n = 100
+ci_low = rep(NA,n)
+ci_up = rep(NA,n)
+for(i in 1:n){
+x = rnorm(20,20,1.5)
+ci_low[i] = mean(x)-1.96*se(x)/sqrt(n)
+ci_up[i] = mean(x)+1.96*se(x)/sqrt(n)
+}
+for(i in 1:n){
+x = rnorm(20,20,1.5)
+ci_low[i] = mean(x)-1.96*sd(x)/sqrt(n)
+ci_up[i] = mean(x)+1.96*sd(x)/sqrt(n)
+}
+ci_low
+ci_up
+# Confidence interval
+n = 100
+ci_low = rep(NA,n)
+ci_up = rep(NA,n)
+for(i in 1:n){
+x = rnorm(20,20,1.5)
+ci_low[i] = mean(x)-1.96*sd(x)/sqrt(20)
+ci_up[i] = mean(x)+1.96*sd(x)/sqrt(20)
+}
+ci_low
+mean(ci_low<20 & ci_up > 20)
+plot(ci_low)
+?plot
+plot()
+lines(ci_low, ci_up)
+?lines
+abline(0,20)
+plot.new()
+abline(0,20)
+?abline
+plot.new()
+abline(20,0)
+?abline
+abline(ci_low,ci_up)
+plot(1:n, ci.low)
+plot(1:n, ci_low)
+plot(1:n, ci_low, xlim = c(19,21))
+plot(1:n, ci_low, ylim = c(19,21))
+points(1:n, ci_up, ylim = c(19,21))
+points(1:n, ci_up, ylim = c(19,21), col =2)
+plot(1:n, ci_low, ylim = c(15,25))
+points(1:n, ci_up, ylim = c(19,21), col =2)
+abline(0,20)
+abline(20,0)
+plot(1:n, ci_low, ylim = c(15,25))
+points(1:n, ci_up, ylim = c(19,21), col =2)
+abline(20,0)
+contains_mean = (ci_low < 20 & ci_up > 20)
+plot.pred.res = geom_point(mapping=aes(x=1:100,y=ci_low),color=contains_mean)
+library(tidyverse)
+plot.pred.res = geom_point(mapping=aes(x=1:100,y=ci_low),color=contains_mean)
+geom_point(mapping=aes(x=1:100,y=ci_low),color=contains_mean)
+ggplot()
+geom_point(mapping=aes(x=1:100,y=ci_low),color=contains_mean)
+ggplot()+geom_point(mapping=aes(x=1:100,y=ci_low),color=contains_mean)
+ggplot()+geom_point(mapping=aes(x=1:100,y=ci_low),label=contains_mean)
+ggplot()+geom_point(mapping=aes(x=1:100,y=ci_low, color=contains_mean))
+ggplot()+geom_point(mapping=aes(x=1:100,y=ci_low, color=contains_mean))+
+geom_point(mapping=aes(x=1:100,y=ci_up,color=contains_mean))
+ggplot()+geom_point(mapping=aes(x=1:100,y=ci_low, color=contains_mean))+
+geom_point(mapping=aes(x=1:100,y=ci_up,color=contains_mean)) +
+geom_segment(aes(x=1:100,y=ci_low,xend=1:100,yend=ci_up,color=contains_mean))
+ggplot()+geom_point(mapping=aes(x=1:100,y=ci_low, color=contains_mean))+
+geom_point(mapping=aes(x=1:100,y=ci_up,color=contains_mean)) +
+geom_segment(aes(x=1:100,y=ci_low,xend=1:100,yend=ci_up,color=contains_mean))+
+xlab("Confidence Interval Repetitions")
+ggplot()+geom_point(mapping=aes(x=1:100,y=ci_low, color=contains_mean))+
+geom_point(mapping=aes(x=1:100,y=ci_up,color=contains_mean)) +
+geom_segment(aes(x=1:100,y=ci_low,xend=1:100,yend=ci_up,color=contains_mean))+
+xlab("Confidence Interval Repetitions")+ylab("")
+ggplot()+geom_point(mapping=aes(x=1:100,y=ci_low, color=contains_mean))+
+geom_point(mapping=aes(x=1:100,y=ci_up,color=contains_mean)) +
+geom_segment(aes(x=1:100,y=ci_low,xend=1:100,yend=ci_up,color=contains_mean))+
+geom_abline(intercept=20,slope=0)+
+xlab("Confidence Interval Repetitions")+ylab("")
+contains_mean = (ci_low <= 20 & ci_up >= 20)
+ggplot()+geom_point(mapping=aes(x=1:100,y=ci_low, color=contains_mean))+
+geom_point(mapping=aes(x=1:100,y=ci_up,color=contains_mean)) +
+geom_segment(aes(x=1:100,y=ci_low,xend=1:100,yend=ci_up,color=contains_mean))+
+geom_abline(intercept=20,slope=0)+
+xlab("Confidence Interval Repetitions")+ylab("")
+n = 1000
+ci_low = rep(NA,n)
+ci_up = rep(NA,n)
+for(i in 1:n){
+x = rnorm(20,20,1.5)
+ci_low[i] = mean(x)-1.96*sd(x)/sqrt(20)
+ci_up[i] = mean(x)+1.96*sd(x)/sqrt(20)
+}
+contains_mean = (ci_low <= 20 & ci_up >= 20)
+ggplot()+geom_point(mapping=aes(x=1:n,y=ci_low, color=contains_mean))+
+geom_point(mapping=aes(x=1:n,y=ci_up,color=contains_mean)) +
+geom_segment(aes(x=1:n,y=ci_low,xend=1:n,yend=ci_up,color=contains_mean))+
+geom_abline(intercept=20,slope=0)+
+xlab("Confidence Interval Repetitions")+ylab("")
+# Confidence interval
+n = 100
+num_rep = 100
+n = 20
+ci_low = rep(NA,n)
+ci_up = rep(NA,n)
+for(i in 1:num_rep){
+x = rnorm(n,20,1.5)
+ci_low[i] = mean(x)-1.96*sd(x)/sqrt(n)
+ci_up[i] = mean(x)+1.96*sd(x)/sqrt(n)
+}
+contains_mean = (ci_low <= 20 & ci_up >= 20)
+ggplot()+geom_point(mapping=aes(x=1:num_rep,y=ci_low, color=contains_mean))+
+geom_point(mapping=aes(x=1:num_rep,y=ci_up,color=contains_mean)) +
+geom_segment(aes(x=1:num_rep,y=ci_low,xend=1:num_rep,yend=ci_up,color=contains_mean))+
+geom_abline(intercept=20,slope=0)+
+xlab("Confidence Interval Repetitions")+ylab("")
+num_rep = 100
+n = 100
+ci_low = rep(NA,n)
+ci_up = rep(NA,n)
+for(i in 1:num_rep){
+x = rnorm(n,20,1.5)
+ci_low[i] = mean(x)-1.96*sd(x)/sqrt(n)
+ci_up[i] = mean(x)+1.96*sd(x)/sqrt(n)
+}
+contains_mean = (ci_low <= 20 & ci_up >= 20)
+ggplot()+geom_point(mapping=aes(x=1:num_rep,y=ci_low, color=contains_mean))+
+geom_point(mapping=aes(x=1:num_rep,y=ci_up,color=contains_mean)) +
+geom_segment(aes(x=1:num_rep,y=ci_low,xend=1:num_rep,yend=ci_up,color=contains_mean))+
+geom_abline(intercept=20,slope=0)+
+xlab("Confidence Interval Repetitions")+ylab("")
+# Confidence interval
+num_rep = 100
+n = 20
+ci_low = rep(NA,num_rep)
+ci_up = rep(NA,num_rep)
+for(i in 1:num_rep){
+x = rnorm(n,20,1.5)
+ci_low[i] = mean(x)-1.96*sd(x)/sqrt(n)
+ci_up[i] = mean(x)+1.96*sd(x)/sqrt(n)
+}
+contains_mean = (ci_low <= 20 & ci_up >= 20)
+ggplot()+geom_point(mapping=aes(x=1:num_rep,y=ci_low, color=contains_mean))+
+geom_point(mapping=aes(x=1:num_rep,y=ci_up,color=contains_mean)) +
+geom_segment(aes(x=1:num_rep,y=ci_low,xend=1:num_rep,yend=ci_up,color=contains_mean))+
+geom_abline(intercept=20,slope=0)+
+xlab("Confidence Interval Repetitions")+ylab("")
+num_rep = 100
+n = 20
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,20,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+p_vals
+hist(p_vals)
+num_rep = 1000
+n = 20
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,20,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+plot(p_vals)
+hist(p_vals)
+num_rep = 1000
+n = 20
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,22,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+hist(p_vals)
+num_rep = 100
+n = 20
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,22,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+hist(p_vals)
+mean(p_vals < 0.05)
+num_rep = 1000
+n = 20
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,20,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+hist(p_vals)
+mean(p_vals < 0.05)
+num_rep = 100
+n = 100
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,22,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+hist(p_vals)
+mean(p_vals < 0.05)
+num_rep = 100
+n = 10
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,22,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+hist(p_vals)
+mean(p_vals < 0.05)
+num_rep = 1000
+n = 20
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,22,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+hist(p_vals)
+mean(p_vals < 0.05)
+num_rep = 1000
+n = 20
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,22,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+hist(p_vals)
+mean(p_vals < 0.05)
+num_rep = 1000
+n = 20
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,22,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+hist(p_vals)
+mean(p_vals < 0.05)
+num_rep = 1000
+n = 20
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,20,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+hist(p_vals)
+mean(p_vals < 0.05)
+num_rep = 1000
+n = 20
+p_vals = rep(NA,num_rep)
+for(i in 1:num_rep){
+x1 = rnorm(n,20,1.5)
+x2 = rnorm(n,22,1.5)
+diff = x1-x2
+p_vals[i] = 2*pnorm(-abs(mean(diff)/(sd(diff)/sqrt(n))))
+}
+hist(p_vals)
+mean(p_vals < 0.05)
+getwd()
+setwd("/Users/Alice/Dropbox/DATA 2020/Labs/Lab 5/")
+kidney = read.csv("kidney.csv")
+install.packages("stats")
+library(stats)
+lm.null = lm(GFR~1,data=kidney)
+lm.full = lm(GRF~.,data=kidney)
+lm.full = lm(GFR~.,data=kidney)
+?step
+step(lm.null,direction="forward")
+step(lm.null,scope=c(lower=lm.null,upper=lm.full),direction="forward")
+step(lm.null,scope=list(lower=lm.null,upper=lm.full),direction="forward")
+kidney = kidney %>% select(-hbpstatus, -UPHO, -TRIG, -LDL, -HDL, -HBA1C)
+library(dplyr)
+kidney = kidney %>% select(-hbpstatus, -UPHO, -TRIG, -LDL, -HDL, -HBA1C)
+kidney = na.omit(kidney)
+lm.null = lm(GFR~1,data=kidney)
+lm.full = lm(GFR~.,data=kidney)
+step(lm.null,scope=list(lower=lm.null,upper=lm.full),direction="forward")
+forward.lm = step(lm.null,scope=list(lower=lm.null,upper=lm.full),direction="forward")
+names(forward.lm)
+forward.lm$model
+forward.lm$coefficients
+coef = forward.lm$coefficients
+summary(forward.lm)
+predict(forward.lm, data=kidney)
+names(kidney)
+forward.lm$anova
+step(lm.null,scope=list(lower=lm.null,upper=lm.full),direction="forward")
+a = step(lm.null,scope=list(lower=lm.null,upper=lm.full),direction="forward")
+summary(a)
+install.packages("MASS")
+a
+a$anova
+step(lm.null,scope=list(lower=lm.null,upper=lm.full),direction="forward")
+?sample
+?sample_frac
+# Split into test and train set
+split = sample_frac(kidney, size = 0.75)
+split
+?sample
+# Split into test and train set
+split = sample(1:nrow(kidney), size = floor(0.75*nrow(kidney)))
+split
+kidney.train = kidney[split,]
+kidney.test = kidney[-split,]
+# Step function for forward selection
+lm.null = lm(GFR~1,data=kidney.train)
+lm.full = lm(GFR~.,data=kidney.train)
+forward.lm = step(lm.null,scope=list(lower=lm.null,upper=lm.full),direction="forward")
+forward.lm$anova
+summary(forward.lm)
+predict(forward.lm, data=kidney.test)
+forward.mse = mean((kidney.test$GFR - predict(forward.lm, data=kidney.test))^2)
+length(predict(forward.lm,data=kidney.test))
+?predict
+forward.mse = mean((kidney.test$GFR - predict(forward.lm, kidney.test))^2)
+length(predict(forward.lm,kidney.test))
+forward.mse
+# Try out for backward selection and compare models and test MSE.
+backward.lm = step(lm.full,scope=list(lower=lm.null,upper=lm.full),direction="backward")
+backward.lm$anova
+summary(backward.lm)
+backward.mse = mean((kidney.test$GFR - predict(backward.lm, kidney.test))^2)
+backward.mse
+forward.mse
+summary(forward.mse)
+summary(forward.lm)
+forward.lm$anova
+forward.lm$anova$AIC
+ggplot()+geom_line(aes(x=1:12, y=forward.lm$anova$AIC))
+library(ggplot2)
+ggplot()+geom_line(aes(x=1:12, y=forward.lm$anova$AIC))
+ggplot()+geom_line(aes(x=1:12, y=forward.lm$anova$AIC))+ylab("AIC")+xlab("Number of Variables")
+# 10-fold cross-validation for lasso and ridge
+# Both require data in matrix format - use model.matrix which transforms categorical variables
+X=model.matrix(GFR~.,kidney)[,-1]
+Y=kidney$GFR
+library(glmnet)
+?cv.glmnet

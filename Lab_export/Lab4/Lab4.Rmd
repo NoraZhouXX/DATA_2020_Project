@@ -1,0 +1,203 @@
+---
+title: "Lab 4: Logistic Regression"
+output:
+  pdf_document: 
+    fig_caption: yes
+  html_document:
+    highlight: pygments
+    theme: cerulean
+  word_document: default
+---
+
+----
+
+**NAME: **  
+
+----
+
+The kidney_simple.csv file (in the Data folder on Canvas) contains data from two kidney disease studies: Modification of Diet and Renal Disease (MDRD) and African American Study of Kidney Disease (AASK). Each row corresponds to a patient, and the variables are:
+
+  -  **WEIGHT**: weight in kg
+  
+  -  **BMI**: body mass index
+
+  -  **SODIUM**: sodium level
+
+  -  **BLACK**: black race (0/1)
+
+  -  **FEMALE**: female (0/1)
+  
+  -  **AGE**: age
+
+  -  **CYS**: serum cystatin level
+  
+  -  **DISEASE**: whether or not the patient has kidney disease (0/1)
+
+Load in this dataset along with some useful libraries.
+```{r,eval=FALSE}
+library(dplyr)
+library(ggplot2)
+library(GGally)
+library(ggfortify)
+library(Hmisc)
+
+kidney = read.csv("kidney_simple.csv")
+names(kidney)
+dim(kidney)
+```
+Luckily for us, there is no missing data in this dataset. Check this for yourself. Some of the 0/1 variables need to be coded as factors rather than integer values. We can do this transformation using the following code and then attach the dataset.
+```{r,eval=FALSE}
+kidney$FEMALE = as.factor(kidney$FEMALE)
+kidney$BLACK = as.factor(kidney$BLACK)
+kidney$DISEASE = as.factor(kidney$DISEASE)
+attach(kidney)
+```
+
+For this lab, we will only perform some very basic EDA. Below we look at the correlations between the continuous variables and any relationships between DISEASE and the other variables.
+```{r,eval=FALSE}
+ggcorr(kidney,label=TRUE)
+plot(DISEASE,SODIUM)
+plot(DISEASE,WEIGHT)
+plot(DISEASE,BMI)
+plot(DISEASE,AGE)
+plot(DISEASE,CYS)
+table(DISEASE,FEMALE)
+table(DISEASE,BLACK)
+```
+Besides doing boxplots, another way that we can analyze the relationship between a categorical variable and a continuous variable is to plot the density of the continuous variable after grouping by the categorical variable. Below is an example. Try this out to look at the distribution of SODIUM, WEIGHT, BMI, AGE, and CYS when conditioned on DISEASE. Based on these results and the above, what predictors do you think will be useful to model whether or not a patient has kidney disease?
+```{r,eval=FALSE}
+ggplot(data=kidney) + geom_density(aes(x=SODIUM,fill=DISEASE),alpha = 0.2)
+```
+
+# Logistic Regression
+
+We will start by fitting a logistic regression model with all variables included. To do so, we use the **glm** function. The function call is very similar to that of **lm** except we must specify the family of generalized model we are using (family=binomial indicates logistic regression).
+```{r,eval=FALSE}
+glm.all = glm(DISEASE~.,data=kidney,family="binomial")
+summary(glm.all)
+```
+Look at the summary of the model and answer the following questions:
+
+  -  How does this differ from the output for linear regression? 
+  -  Which variables are significant? 
+  -  How do you interpret each coefficient?
+  -  What is a 95% confidence interval for $\beta_{\text{CYS}}$, the coefficient for CYS? 
+  -  What is a 95% confidence interval for $exp(\beta_{\text{CYS}})$?
+
+Note that the significance of FEMALE, BLACK, and CYS all match with what we would expect from our EDA. Let's now fit a model taking out all the insignificant variables. 
+```{r,eval=FALSE}
+glm.1 = glm(DISEASE~BLACK+FEMALE+AGE+CYS,data=kidney,family="binomial")
+```
+Note that glm.1 and glm.all are nested models so we can use a likelihood ratio test to test whether or not the larger model significantly improves the fit. We do so using the function **lrtest** from the package **lmtest** (recall that we used anova for linear models).
+```{r,eval=FALSE}
+lrtest(glm.1,glm.all)
+```
+This test gives us some evidence for actually keeping the larger model even though these variables had large $p$-values in glm.all. One thing that we might want to check is the variance inflation factors. The **car** packages includes the **vif** function which lets us easily calculate these factors.
+```{r,eval=FALSE}
+vif(glm.all)
+```
+Looking at the output, we can see that WEIGHT and BMI have high variance inflation factors, which makes sense given our understanding of these variables. Therefore, let's try keeping one of these variables. 
+```{r,eval=FALSE}
+glm.2 = glm(DISEASE~BLACK+FEMALE+AGE+CYS+WEIGHT,data=kidney,family="binomial")
+lrtest(glm.2,glm.all)
+```
+Now we actually observe a large $p$-value in the likelihood ratio test! This shows how multicollinearity can overly inflate the confidence intervals for some variables. 
+
+For the remainder of the lab, we will analyze glm.2. Try plotting the model output using **autoplot**. 
+```{r,eval=FALSE}
+autoplot(glm.2)
+```
+What do you notice about the residuals? Why do we observe this pattern (hint: think about what we are predicting vs what we have observed)? In general, in logistic regression, only the last plot that shows the standardized pearson residuals and leverage values is very useful. 
+
+Given the fitted model, we can find predicted probabilities or predicted odds ratios. 
+```{r,eval=FALSE}
+glm.probs = predict(glm.2,type="response")
+glm.odds = exp(predict(glm.2,type="link"))
+```
+Note that in the second line we are predicting the link function. For logistic regression, this is the log odds so exponentiating that value gives us the predicted odds. Of course, it might be useful for us to predict the binary outcome of whether or not a patient has kidney disease. To do so, we can pick a threshold value for the predicted probability. 
+```{r,eval=FALSE}
+glm.pred = (glm.probs > 0.5)
+table(glm.pred,DISEASE)
+```
+Here, we chose to predict kidney disease if the predicted probability is >0.5. The table gives the predicted disease values vs actual. What is the specificity and sensitivity for this threshold? Why might we choose a different threshold other than 0.5?
+
+The ROC curve gives us a good look at the trade-off between sensitivity and specificity for different thresholds. We will use the **pROC** package to plot the ROC curve and to find the area under the curve (AUC).
+```{r,eval=FALSE}
+# ROC curve and AUC
+roc.2 = roc(DISEASE,glm.probs)
+auc(roc.2)
+ggroc(data=roc.2)
+```
+Given the AUC, how well does our model seem to fit the data?
+
+Another metric of goodness-of-fit is to examine the calibration of the model. To do so, we group the data into $g = 10$ groups by increasing predicted probability values. Within each group we look at the average predicted probability and then the percentage of patients that actually have the disease. Ideally, these would be very close. Does the model appear to be well-calibrated?
+```{r,eval=FALSE}
+ordering = order(glm.probs)
+avg.probs = numeric(10)
+avg.disease = numeric(10)
+for (i in 1:10){
+  start = (i-1)*155+1
+  end = min(1547,start+154)
+  avg.probs[i] = mean(glm.probs[ordering[start:end]])
+  avg.disease[i] = mean(DISEASE[ordering[start:end]]==TRUE)
+}
+ggplot()+geom_point(aes(x=avg.probs,y=avg.disease))+geom_abline(aes(slope=1,intercept=0),col="red")
+```
+
+As we noted earlier, the typical residual values are not very informative. Instead, it can be useful to look at the standardized pearson or standardized deviance residuals to look into any outliers. 
+```{r,eval=FALSE}
+pear.res = residuals(glm.2,type="pearson")
+std.pear = pear.res/sqrt(1 - hatvalues(glm.2))
+dev.res = residuals(glm.2,type="deviance")
+std.dev = dev.res/sqrt(1-hatvalues(glm.2))
+
+summary(std.pear)
+kidney[std.pear > 2,]
+```
+Additionally, we can look for any high leverage points by calculating the Cook's distance for each point. Below, we see that there do not seem to be any points with very high leverage.
+```{r,eval=FALSE}
+c.dist = cooks.distance(glm.2)
+summary(c.dist)
+```
+
+# Cross-validation and Bootstrap
+
+To further compare glm.1 and glm.2, we can use cross-validation to estimate the difference in test error between the models. In particular, below we run 10-fold cross-validation. Within the for loop, we fit each model only on the training data and then evaluate the MSE on the test set. 
+```{r,eval=FALSE}
+folds = sample(1:10, nrow(kidney), replace = TRUE)
+cv.mse = matrix(NA, nrow = 10, ncol = 2)
+
+for (i in 1:10){
+  glm.1=glm(DISEASE~BLACK+FEMALE+AGE+CYS,family="binomial",data=kidney[folds!=i,])
+  glm.2=glm(DISEASE~BLACK+FEMALE+AGE+CYS+WEIGHT,family="binomial",data=kidney[folds!=i,])
+  y = as.numeric(DISEASE[folds == i])-1
+  pred.1 = predict(glm.1,type="response",newdata=kidney[folds==i,])
+  pred.2 = predict(glm.2,type="response",newdata=kidney[folds==i,])
+  cv.mse[i,1] = mean((y-pred.1)^2)
+  cv.mse[i,2] = mean((y-pred.2)^2)
+}
+avg.cv.mse = apply(cv.mse,2,mean)
+sd.cv.mse = apply(cv.mse,2,sd)
+```
+Which model has the lower estimated test MSE? 
+
+Last, we demonstrate how to use bootstrapping to estimate the variance of a random variable. Install and load the **boot** package. The **boot** function in this package allows us to bootstrap any statistic as long as it is in the right format. We give an example below in which we are estimating the mean and variance of $\beta_0$ for glm.2 
+```{r,eval=FALSE}
+intercept = function(data,indices){
+  d = data[indices,]
+  return(coef(glm(DISEASE~BLACK+FEMALE+AGE+CYS+WEIGHT,data=d,family="binomial"))[1])
+}
+
+boot(data=kidney,statistic=intercept,R=1000)
+```
+Note that we created a function for our desired statistic with the inputs **data** and **indices**. The function returns the intercept value for the data with rows chosen by indices. Having these two inputs is necessary to run the boot function. Then to bootstrap we can call boot where we specify the data, statistic function, and number of runs (R). Essentially, boot will then call intercept R times and each time will draw indices as a bootstrap sample. The output shows the estimated value on the whole dataset, the estimated bias, and the estimated variance. 
+
+Our statistic function can also take in other variables. The below function allows us to bootstrap the estimated intercept value for any glm model using the added variable **formula**.
+```{r,eval=FALSE}
+intercept = function(formula,data,indices){
+  d = data[indices,]
+  return(coef(glm(formula,data=d,family="binomial"))[1])
+}
+
+boot(data=kidney,statistic=intercept,R=1000,formula=DISEASE~BLACK+FEMALE+AGE+CYS+WEIGHT)
+```

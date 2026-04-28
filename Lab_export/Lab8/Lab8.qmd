@@ -1,0 +1,307 @@
+---
+title: "Lab 8: Multilevel Models: Students Within Schools"
+author: "Your Name"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-fold: false
+  pdf: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+# Overview
+In previous labs, we assumed that all observations were independent. However, in many real datasets this assumption is unrealistic. Observations are often grouped into higher-level units. For example:
+
+• Patients are treated within hospitals  
+• Students are taught within schools  
+• Employees work within firms  
+• Residents live within counties  
+
+When observations belong to the same group, they often share common influences. For example, students in the same school share:
+
+• teachers  
+• curriculum  
+• administrative policies  
+• peer environments  
+• resource availability  
+
+Because of this, their outcomes may be correlated. Standard regression assumes independence of observations. When this assumption is violated, standard errors may be incorrect and inference may be misleading.
+
+Multilevel models (also called hierarchical models or mixed effects models) explicitly model this structure.
+
+In this lab we will analyze student math achievement where students are nested within schools.
+
+We will:
+
+• Compare OLS vs multilevel models  
+• Measure between-school variation  
+• Compute the Intraclass Correlation (ICC)  
+• Fit random intercept models  
+• Fit random slope models  
+• Interpret variance components  
+
+---
+
+## Learning Objectives
+
+By the end of this lab you should be able to:
+
+• Explain why clustering violates regression assumptions  
+• Interpret random intercept models  
+• Calculate ICC  
+• Explain variance decomposition  
+• Interpret school-level variation  
+• Understand partial pooling  
+
+---
+
+## Load data
+This dataset contains student level and school level variables merged into one dataset.
+Student variables:
+• MathAch → math achievement score
+• SES → socioeconomic status
+• Female → gender indicator
+• Minority → minority indicator
+School variables:
+• Sector → public vs Catholic school
+• Size → school size
+• MeanSES → average school SES
+• Disclim → discipline climate
+
+```{r}
+# Set CRAN mirror (REQUIRED for Quarto rendering)
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+required_packages <- c("tidyverse","lme4","lmerTest")
+
+new_packages <- required_packages[
+  !(required_packages %in% installed.packages()[,"Package"])
+]
+
+if(length(new_packages)){
+  install.packages(new_packages)
+}
+
+lapply(required_packages, library, character.only = TRUE)
+
+hsb <- read.csv("hsb_multilevel.csv")
+
+hsb$Sex <- factor(hsb$Sex)
+hsb$Minority <- factor(hsb$Minority)
+hsb$Sector <- factor(hsb$Sector)
+hsb$School <- factor(hsb$School)
+
+# Remove duplicate column
+hsb$MEANSES.y <- NULL
+
+str(hsb)
+head(hsb)
+```
+
+---
+
+# Data exploration
+## Understanding the hierarchical structure
+Before fitting models, we should understand the structure of the data.
+```{r}
+summary(hsb)
+
+table(hsb$School)
+
+length(unique(hsb$School))
+
+nrow(hsb)
+
+```
+
+Some questions to consider:
+- How many schools are in the dataset?
+- How many students are in each school?
+- What is the average math achievement score across all students?
+- What is the average math achievement score within each school?
+- How much variation in math achievement is there between schools vs within schools?
+- Are there any schools that stand out as particularly high or low performing?
+- What is the average number of students per school?
+- Why might students within the same school have similar outcomes?
+- Give three possible shared influences within schools.
+
+# Exploring Math Achievement
+```{r}
+summary(hsb$MathAch)
+
+ggplot(hsb,aes(MathAch))+
+geom_histogram(bins=30)+
+theme_minimal()
+```
+
+Some questions to consider:
+- Is math achievement approximately normally distributed?
+- Are there any extreme values?
+- Why might distribution shape matter for modeling?
+
+# Baseline OLS model
+First, let's fit a simple OLS regression ignoring the hierarchical structure.
+This assumes:
+All students are independent.
+This is likely false because students share schools.
+```{r}
+ols <- lm(MathAch ~ SES + Sex + Minority, data=hsb)
+
+summary(ols)
+```
+
+Some interpretation questions:
+- Interpret the SES coefficient.
+- Does being female significantly affect math achievement?
+- Does being a minority significantly affect math achievement?
+- What assumptions does OLS make about errors?
+- Why might those assumptions fail here?
+
+# Why OLS may be wrong here
+OLS assumes:
+$Cov(\epsilon_i,\epsilon_j)=0$
+But if students share schools:
+$Cov(\epsilon_i,\epsilon_j) \neq 0$
+This creates correlated residuals.
+When this happens:
+• Standard errors are underestimated
+• Significance may be overstated
+• Inference becomes unreliable
+Multilevel models fix this by modeling school variation explicitly.
+
+# Null Multilevel Model
+Let's fit a null model with no predictors, just random intercepts for schools.
+This partitions variance into:
+- Between-school variance
+- Within-school variance
+```{r}
+null_model <- lmer(MathAch ~ 1 + (1 | School), data = hsb)
+
+summary(null_model)
+```
+
+# Understanding Variance Components
+This model estimates:
+MathAch = school effect + student noise
+Variance components represent:
+- School variance → differences between schools
+- Residual variance → differences within schools
+
+# ICC Calculation
+The Intraclass Correlation Coefficient (ICC) measures the proportion of total variance that is between schools.
+$ICC = \frac{\sigma^2_{school}}{\sigma^2_{school}+\sigma^2_{residual}}$
+A higher ICC means more clustering within schools. 
+```{r}
+var_school <- as.numeric(VarCorr(null_model)$School)
+
+var_resid <- attr(VarCorr(null_model),"sc")^2
+
+ICC <- var_school/(var_school+var_resid)
+
+ICC
+```
+
+Some interpretation questions:
+- What does the ICC value tell us about the clustering of math achievement within schools?
+- If the ICC is close to 0, what does that imply about the importance of school-level factors?
+- If the ICC is close to 1, what does that imply about the importance of school-level factors?
+- How would ignoring the ICC affect our conclusions about the effects of SES, gender, and minority status on math achievement?
+- What are some potential school-level factors that could explain between-school variation in math achievement?
+- How might we include those school-level factors in a multilevel model?
+- What are the benefits of using a multilevel model compared to OLS in this context?
+- Why does ICC justify the use of multilevel modeling for this data?
+
+# Random Intercept Model
+Now let's add student-level predictors to the model while still allowing for random intercepts by school.
+```{r}
+model1 <- lmer(MathAch ~ SES + Sex + Minority + (1 | School),
+               data = hsb)
+summary(model1)
+```
+
+Some interpretation questions:
+- How do the coefficients for SES, Female, and Minority change compared to the OLS model?
+- Are the predictors still significant after accounting for school-level variation?
+- What does the random intercept variance tell us about differences between schools after controlling for student-level factors
+- How would you interpret the random intercepts for each school?
+- What does it mean if a school has a positive random intercept vs a negative random intercept?
+- How does the inclusion of random intercepts affect our understanding of the effects of SES, gender, and minority status on math achievement?
+- What are some potential limitations of this random intercept model?
+- How might we extend this model to include school-level predictors?
+
+# Adding School-Level Predictors
+Now let's add school-level predictors to explain some of the between-school variation.
+```{r}
+model2 <- lmer(MathAch ~ SES + Sex + Minority + Sector + MEANSES.x + (1 | School),
+               data = hsb)
+summary(model2)
+
+```
+
+Some interpretation questions:
+- How do the coefficients for Sector and MeanSES help explain between-school variation in math achievement?
+- Do these school-level predictors reduce the random intercept variance compared to the previous model?
+- How do the student-level predictors change after adding school-level predictors?
+- What does this tell us about the relative importance of student-level vs school-level factors in explaining math achievement?
+- How would you interpret the coefficient for Sector (public vs Catholic schools)?
+- How would you interpret the coefficient for MeanSES (average school SES)?
+- What are some potential confounders that could affect the relationship between school-level predictors and math achievement?
+- How might we further extend this model to include interactions between student-level and school-level predictors?
+
+# Random Slope Model
+Finally, let's allow the effect of SES to vary across schools by adding a random slope for SES. This tests whether SES matters more in some schools.
+```{r}
+model3 <- lmer(MathAch ~ SES + Sex + Minority + (SES | School),
+               data = hsb)
+summary(model3)
+
+```
+
+Some interpretation questions:
+- How does the random slope for SES affect our understanding of the relationship between SES and math achievement?
+- What does the variance of the random slope for SES tell us about how much the effect of SES varies across schools?
+- Are there any schools where SES has a particularly strong or weak effect on math achievement?
+- How does the inclusion of a random slope for SES affect the fixed effect coefficient for SES?
+- What does the correlation between the random intercept and random slope for SES tell us about the relationship between school-level effects and the effect of SES?
+- How would you interpret a positive vs negative correlation between the random intercept and random slope for SES?
+- What are some potential implications of finding significant random slopes for SES in terms of educational policy and interventions?
+
+# Model Comparison
+We can compare the fit of our models using AIC or likelihood ratio tests.
+```{r}
+AIC(ols,model1,model2,model3)
+```
+
+Some questions to consider:
+- Which model has the lowest AIC and is therefore the best fitting model?
+- How does the inclusion of random effects and school-level predictors improve model fit compared to OLS?
+- What does this tell us about the importance of accounting for hierarchical structure in the data?
+- What is the tradeoff between model complexity and fit?
+
+# Visualizing School Effects
+We can visualize the random intercepts for each school to see which schools are performing above or below average after controlling for student-level factors. 
+
+```{r}
+ranef(model1)$School %>%
+ggplot(aes(x=`(Intercept)`))+
+geom_histogram(bins=30)+
+theme_minimal()
+```
+
+Some questions to consider:
+- What does the distribution of random intercepts tell us about the variation in school effects on math achievement?
+- Are there any schools that stand out as particularly high or low performing after controlling for student-level factors?
+- How might we use this information to target interventions or resources to schools that are struggling?
+- What are some potential limitations of interpreting random intercepts as measures of school quality?
+
+# Key Takeaways
+Multilevel models allow us to:
+• Model clustered data
+• Estimate group variation
+• Improve inference
+• Separate within and between effects
+They are essential whenever data has hierarchical structure.

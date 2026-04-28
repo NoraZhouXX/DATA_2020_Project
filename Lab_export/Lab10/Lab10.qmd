@@ -1,0 +1,359 @@
+---
+title: "Lab 10: Review Lab: Hypothesis Testing and Confidence Intervals"
+author: "Your Name"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-fold: false
+  pdf: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Introduction
+
+This lab reviews core concepts in hypothesis testing using a real dataset. The goal is not only to perform statistical tests, but also to understand when to use them, how to interpret results, and how they connect to confidence intervals.
+
+We will cover:
+1. Paired t-tests  
+2. Two-sample t-tests  
+3. One-sample tests  
+4. Proportion tests  
+5. Confidence intervals  
+6. Type I and Type II errors  
+7. Choosing the correct test  
+
+---
+
+# Load Data
+
+```{r}
+lab_data <- read.csv("hypothesis_lab_data.csv")
+head(lab_data)
+summary(lab_data)
+```
+
+---
+
+# Part 0: Understanding the Data
+
+## Question 1
+
+Classify each of the following variables as either categorical or numerical. Briefly justify your answer.
+
+- group  
+- pre_score  
+- post_score  
+- improvement  
+- passed  
+
+## Answer
+
+- group: Categorical variable because it represents group membership (Control vs Tutoring).  
+- pre_score: Numerical variable because it measures test scores.  
+- post_score: Numerical variable because it measures test scores.  
+- improvement: Numerical variable because it represents a computed difference in scores.  
+- passed: Categorical variable because it indicates a binary outcome (Yes or No).  
+
+---
+
+## Question 2
+
+Provide at least three meaningful statistical questions that can be investigated using this dataset.
+
+## Answer
+
+- Did students improve after the intervention (pre vs post scores)?  
+- Did the tutoring group improve more than the control group?  
+- Is the average post-test score significantly different from 75?  
+- Is the proportion of students who passed greater than 70%?  
+
+---
+
+## Exploratory Data Analysis
+
+```{r}
+# Summary by group
+aggregate(improvement ~ group, data = lab_data, mean)
+
+# Boxplot
+boxplot(improvement ~ group, data = lab_data, col = c("lightblue", "lightgreen"),
+        main = "Improvement by Group")
+
+# Histogram
+hist(lab_data$improvement, main = "Distribution of Improvement", col = "lightgray")
+```
+
+---
+
+# Part 1: Paired t-test
+
+## Research Question
+
+Do students show a statistically significant improvement from pre-test to post-test scores?
+
+---
+
+## Question 1
+
+Clearly state the null and alternative hypotheses.
+
+## Answer
+
+H0: The mean difference between post-test and pre-test scores is equal to 0.  
+HA: The mean difference between post-test and pre-test scores is greater than 0.  
+
+---
+
+## Question 2
+
+Explain why a paired t-test is appropriate in this setting.
+
+## Answer
+
+A paired t-test is appropriate because the pre-test and post-test scores are measured on the same individuals. This creates dependent observations, and the test accounts for within-subject variation.
+
+---
+
+## Question 3
+
+Conduct the paired t-test.
+
+```{r}
+paired_test <- t.test(lab_data$post_score, lab_data$pre_score,
+                     paired = TRUE, alternative = "greater")
+paired_test
+```
+
+---
+
+## Question 4
+
+Interpret the p-value in the context of this problem.
+
+## Answer
+
+If the p-value is less than 0.05, we reject the null hypothesis and conclude that there is statistically significant evidence that students improved after the intervention.
+
+---
+
+## Question 5
+
+Compute and interpret the confidence interval for the mean difference.
+
+```{r}
+paired_test$conf.int
+```
+
+## Answer
+
+If the confidence interval lies entirely above 0, this indicates that the average improvement is positive, reinforcing the conclusion that students improved.
+
+---
+
+## Question 6
+
+Explain what a Type I error and a Type II error would mean in this context.
+
+## Answer
+
+A Type I error would occur if we conclude that students improved when, in reality, there was no improvement.  
+A Type II error would occur if we fail to detect an actual improvement in student performance.
+
+---
+
+# Part 2: Two-Sample t-test
+
+## Research Question
+
+Does the tutoring group experience greater improvement than the control group?
+
+---
+
+## Question 1
+
+State the null and alternative hypotheses.
+
+## Answer
+
+H0: The mean improvement in the tutoring group is equal to the mean improvement in the control group.  
+HA: The mean improvement in the tutoring group is greater than that of the control group.  
+
+---
+
+## Question 2
+
+Conduct the two-sample t-test.
+
+```{r}
+two_sample_test <- t.test(improvement ~ group, data = lab_data,
+                         alternative = "greater")
+two_sample_test
+```
+
+---
+
+## Question 3
+
+Interpret the results in context.
+
+## Answer
+
+If the p-value is less than 0.05, we conclude that the tutoring group shows significantly greater improvement compared to the control group.
+
+---
+
+# Part 3: One-Sample Mean Test
+
+## Research Question
+
+Is the average post-test score significantly different from 75?
+
+---
+
+## Question 1
+
+State the hypotheses.
+
+## Answer
+
+H0: The mean post-test score is equal to 75.  
+HA: The mean post-test score is not equal to 75.  
+
+---
+
+## Question 2
+
+Conduct the test.
+
+```{r}
+one_sample_test <- t.test(lab_data$post_score, mu = 75)
+one_sample_test
+```
+
+---
+
+## Question 3
+
+Interpret the results.
+
+## Answer
+
+If the p-value is less than 0.05, we conclude that the mean post-test score is significantly different from 75.
+
+---
+
+# Part 4: Proportion Test
+
+## Research Question
+
+Is the proportion of students who passed greater than 70%?
+
+---
+
+## Question 1
+
+State the hypotheses.
+
+## Answer
+
+H0: The proportion of students who passed is equal to 0.70.  
+HA: The proportion of students who passed is greater than 0.70.  
+
+---
+
+## Question 2
+
+Conduct the proportion test.
+
+```{r}
+prop_test <- prop.test(sum(lab_data$passed == "Yes"),
+                       nrow(lab_data),
+                       p = 0.7,
+                       alternative = "greater")
+prop_test
+```
+
+---
+
+## Question 3
+
+Interpret the results.
+
+## Answer
+
+If the p-value is less than 0.05, we conclude that the proportion of students who passed is significantly greater than 70%.
+
+---
+
+# Part 5: Confidence Intervals
+
+## Question
+
+Explain the relationship between hypothesis testing and confidence intervals.
+
+## Answer
+
+Confidence intervals provide a range of plausible values for a parameter. If the null hypothesis value lies outside the confidence interval, we reject the null hypothesis. If it lies within the interval, we fail to reject the null hypothesis.
+
+---
+
+# Part 6: Choosing the Correct Test
+
+## Question
+
+Match each scenario with the appropriate statistical test.
+
+1. Measurements taken before and after on the same individuals  
+2. Comparing two independent groups  
+3. Comparing a sample mean to a known value  
+4. Testing a proportion  
+
+## Answer
+
+1. Paired t-test  
+2. Two-sample t-test  
+3. One-sample t-test  
+4. Proportion test  
+
+---
+
+# Part 7: Assumptions
+
+## Question
+
+List and explain the key assumptions required for t-tests.
+
+## Answer
+
+- Independence: Observations must be independent of each other.  
+- Normality: The data should be approximately normally distributed, or the sample size should be sufficiently large.  
+- Equal variance (for two-sample tests): The variability in both groups should be similar, depending on the test used.  
+
+---
+
+# Part 8: Effect Size vs Statistical Significance
+
+## Question
+
+Explain the difference between statistical significance and practical significance.
+
+## Answer
+
+Statistical significance indicates whether an observed effect is unlikely to be due to chance. Practical significance considers whether the magnitude of the effect is meaningful in a real-world context. A result can be statistically significant but still have little practical importance.
+
+---
+
+# Final Reflection
+
+## Question
+
+What is the most important takeaway from hypothesis testing?
+
+## Answer
+
+Hypothesis testing provides a structured framework for making decisions based on data, but results must always be interpreted carefully in context, considering assumptions, effect sizes, and real-world implications.

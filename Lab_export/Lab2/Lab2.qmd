@@ -1,0 +1,310 @@
+---
+title: "Lab 2: Exploratory Data Analysis"
+author: "NAME:"
+format:
+  html:
+    theme: cerulean
+    highlight-style: pygments
+    toc: true
+    number-sections: true
+  pdf:
+    toc: true
+    number-sections: true
+  docx: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+**NAME: **
+
+----
+
+## Setup
+
+```{r eval = TRUE}
+library("knitr")
+library("dslabs")
+library("dplyr")
+library("ggplot2")
+
+# Optional packages used later:
+#install.packages("Hmisc")
+#install.packages("gtsummary")
+#install.packages("GGally")
+
+diseases = us_contagious_diseases
+
+knitr::opts_chunk$set(fig.align = "center")
+```
+
+# Exploring the Variables
+One of the first things we should do after loading in a dataset is find out what are the variables. Do you remember the function to do this?
+```{r eval = TRUE}
+names(diseases)
+str(diseases)
+```
+
+Next, we want to check how much data is missing. One way to do this is to use the command complete.cases:
+```{r eval = TRUE}
+sum(!complete.cases(diseases))
+nrow(diseases)
+```
+
+This calculates the number of incomplete rows (some missing data) and then compares it to the total number of rows in the dataset. Since we are not missing much data in this case, we can choose to omit these rows using the na.omit command:
+```{r eval = TRUE}
+diseases = na.omit(diseases)
+```
+
+Otherwise, we could explore which columns contain the most missing data. If a column contains a lot of missing values, it might indicate that we should ignore it. There are no such columns in our case. We will talk about more strategies for dealing with missing data later on in the course.
+
+As mentioned in class, the **describe** function (which is part of the Hmisc package) can be very useful to get a first look at the columns in the dataset.
+```{r eval = TRUE}
+library("Hmisc")
+describe(diseases$year)
+describe(diseases$disease)
+```
+Note that describe doesn't work well for categorical variables with many levels such as state - we can always use summary instead.
+
+We also might measure the variability of continuous variables by measuring their standard deviation:
+```{r eval = TRUE}
+sd(diseases$count)
+mean(diseases$count)
+```
+What do you notice about the standard deviation of count compared to the mean? Why might this be the case?
+
+Beyond quantitative outputs, plotting the distribution of continuous variables can also be helpful.
+```{r eval = TRUE}
+hist(diseases$count)
+plot(density(diseases$count))
+```
+
+Of course, these plots are not very informative for count. Instead, let's look at a log transformation of the variable.
+```{r eval = TRUE}
+hist(log(diseases$count))
+plot(density(log(diseases$count)))
+```
+
+We can also try filtering the data and looking at another variable.
+```{r eval = TRUE}
+ri_measles = diseases %>%
+  filter(state == "Rhode Island", disease == "Measles")
+
+hist(ri_measles$population)
+plot(density(ri_measles$population))
+```
+
+A box plot is also useful to help understand a distribution. Box plots can be especially useful for finding outliers and summarizing the variability of a variable.
+```{r eval = TRUE}
+boxplot(ri_measles$population)
+```
+
+# Create rate
+Create a new variable called rate which is equal to:
+$100000 \times (\text{count} / \text{population}) \times (52 / \text{weeks\_reporting})$
+
+What does rate represent? Why might this new variable be helpful when looking at the distributions for different diseases?
+```{r eval = TRUE}
+diseases = diseases %>%
+  mutate(rate = 100000 * (count / population) * (52 / weeks_reporting))
+
+# Remove cases where rate becomes NA/Inf (e.g., weeks_reporting = 0)
+diseases = diseases %>%
+  filter(is.finite(rate))
+
+```
+
+Looking only at records for measles and years prior to 1963 (the year the measles vaccine was introduced), create a histogram and boxplot for rate. Save this filtered dataset as **diseases_sub** for future use.
+```{r eval = TRUE}
+diseases_sub = diseases %>%
+  filter(disease == "Measles", year < 1963)
+
+hist(diseases_sub$rate)
+boxplot(diseases_sub$rate)
+```
+
+# Summary Tables (Basic vs Stratified)
+## Basic Summary Table
+The basic summary table provides an overall description of the dataset without conditioning on any subgroup. It summarizes the central tendency and spread of key continuous variables such as year, weeks_reporting, count, population, and rate, and shows the frequency of each disease. This table is useful for gaining a high-level understanding of the scale of the data, the time span covered, and the typical magnitude of disease counts and rates across all observations. However, because it aggregates over all diseases and states, it can mask important heterogeneity between groups.
+```{r eval = TRUE}
+summary(diseases[, c("year", "weeks_reporting", "count", "population", "rate")])
+table(diseases$disease)
+```
+
+or a nicer alternative:
+```{r eval = TRUE}
+library("gtsummary")
+
+diseases %>%
+  select(year, weeks_reporting, count, population, rate, disease, state) %>%
+  tbl_summary()
+```
+## Stratified Summary Table (by disease)
+The stratified summary table breaks down the same set of variables by disease, allowing us to compare distributions across different diseases. This makes it easier to identify differences in reporting frequency, population exposure, and disease severity. For example, we can observe whether certain diseases tend to have higher average rates or more variability than others. Stratification by disease is particularly important in this dataset because diseases differ substantially in prevalence, transmission patterns, and historical context.
+```{r eval = TRUE}
+diseases %>%
+  select(year, weeks_reporting, count, population, rate, disease) %>%
+  tbl_summary(by = disease)
+```
+
+## Why use both basic and stratified tables?
+Using both basic and stratified summary tables allows us to balance **simplicity and insight**. The basic summary gives a concise overview of the entire dataset, while stratified summaries reveal patterns that depend on disease type or geographic location. Together, these tables help ensure that important subgroup differences are not overlooked during exploratory data analysis.
+
+# Relationships Between Variables
+One thing that we noticed earlier is that the count is related to the total population size. A quick way to examine the relationship between two continuous variables is to plot them or calculate the correlation.
+```{r eval = TRUE}
+plot(x = diseases$population, y = diseases$count,
+     xlab = "Population", ylab = "Count")
+cor(diseases$count, diseases$population)
+```
+
+Do the results match your intuition? What if we do the same for diseases_sub?
+```{r eval = TRUE}
+plot(x = diseases_sub$population, y = diseases_sub$count,
+     xlab = "Population", ylab = "Count")
+cor(diseases_sub$count, diseases_sub$population)
+```
+
+When we have one continuous variable and one categorical variable, then we can still use plot to compare the box plots for the continuous variable within each category. Try out the example below - you may need to zoom in to see the different box plots.
+```{r eval = TRUE}
+plot(x = diseases$disease, y = diseases$rate,
+     xlab = "Disease", ylab = "Rate per 100,000")
+```
+
+What do you notice?
+
+Last, when looking at the relationship between two categorical variables, we can use **contingency tables.**
+
+First, create a new variable in the original diseases dataset called high_rate which represents whether or not the rate is above 100. Then, create a contingency table between high_rate and disease.
+```{r eval = TRUE}
+diseases = diseases %>%
+  mutate(high_rate = (rate > 100))
+
+table(diseases$high_rate, diseases$disease)
+```
+
+Does this match with what we observed in the previous plot?
+
+# Data Visualization Tools
+So far, we have just used built-in plotting functions in R. However, we can get much more creative by using the **ggplot2** package.
+
+When using ggplot, we can add multiple pieces to a plot. We first start with the data.
+
+```{r eval = TRUE}
+p = ggplot(data = diseases)
+```
+
+From this we can add on different **geoms**, which are layers. One such geom is a scatter plot.
+```{r eval = TRUE}
+p = p + geom_point(aes(x = year, y = rate, col = disease))
+p
+```
+
+We can also add labels using the same framework.
+
+```{r eval = TRUE}
+p = p + xlab("Year") + ylab("Rate per 100,000")
+p
+```
+
+Let's try that again. This time, let's plot the overall R.I. rate for each disease over time.
+```{r eval = TRUE}
+p2 = diseases %>%
+  filter(state == "Rhode Island") %>%
+  ggplot() +
+  geom_line(aes(x = year, y = rate, group = disease, col = disease))
+
+p2
+```
+
+The measles vaccine was introduced in 1963 and the polio vaccine in 1955. Let's add vertical lines for each of these dates to highlight the effect of the vaccine.
+```{r eval = TRUE}
+p2 +
+  geom_vline(xintercept = 1963, col = "gray") +
+  geom_vline(xintercept = 1955, col = "gray")
+```
+
+# Auto-generated Plot (4.3): GGPairs
+```{r eval = TRUE}
+library("GGally")
+
+ri_measles_pre = diseases %>%
+  filter(state == "Rhode Island", disease == "Measles", year < 1963) %>%
+  select(year, weeks_reporting, count, population, rate)
+
+ggpairs(ri_measles_pre)
+```
+
+# Hypothesis Testing Examples
+## Example 1: Two-sample t-test (RI vs non-RI measles pre-1963)
+Let $\mu_{RI}$ be the mean rate of measles in RI prior to 1963 and $\mu_{US\setminus RI}$ be the mean rate of measles in the US excluding RI prior to 1963.
+
+$H_0$: $\mu_{RI} = \mu_{US\setminus RI}$
+$H_A$: $\mu_{RI} \neq \mu_{US\setminus RI}$
+```{r eval = TRUE}
+rates_ri = diseases %>%
+  filter(state == "Rhode Island", disease == "Measles", year <= 1963) %>%
+  pull(rate)
+
+rates_nonri = diseases %>%
+  filter(state != "Rhode Island", disease == "Measles", year <= 1963) %>%
+  pull(rate)
+
+t.test(rates_ri, rates_nonri)
+```
+
+## Example 2: Chi-square test of independence (RI vs non-RI and high_rate)
+We test whether having a high rate of measles (rate > 100) is related to being in RI vs not.
+$H_0$: independent
+$H_A$: related
+```{r eval = TRUE}
+diseases_measles = diseases %>%
+  filter(year <= 1963, disease == "Measles") %>%
+  mutate(ri = (state == "Rhode Island"))
+
+chisq.test(table(diseases_measles$ri, diseases_measles$high_rate), correct = FALSE)
+```
+
+## Example 3: Vaccine effectiveness (measles pre vs post 1963)
+Here, we test the vaccine effectiveness claim: Do vaccines seem effective?
+$H_0$: mean rate before 1963 equals mean rate after 1963
+$H_A$: means differ
+```{r eval = TRUE}
+measles_pre = diseases %>%
+  filter(disease == "Measles", year < 1963) %>%
+  pull(rate)
+
+measles_post = diseases %>%
+  filter(disease == "Measles", year >= 1963) %>%
+  pull(rate)
+
+t.test(measles_pre, measles_post)
+```
+
+# Writing up your EDA
+Whenever you analyze a dataset, it is useful to write up your findings in a clear report.
+
+We analyze a dataset of infectious disease records in the US. The dataset used comes from the Tycho project and can be downloaded using the dslabs package in R. Each row corresponds to a state's yearly count record for a contagious disease, and the variables are **disease, state, year, weeks_reporting, count, and population**. Weeks_reporting corresponds to the total number of weeks that disease counts were recorded that year and population corresponds to the state's population for that year (interpolated for non-census years). In our analysis, we will focus on incidents of contagious diseases in RI. We want to understand how the prevalence of diseases changed over time and how these trends relate to the rest of the US.
+
+We first checked for any missing data and found that only around 1% of the data was missing. This corresponded to entries for which the weeks_reporting was missing. We decided to omit this data in our analysis.
+
+We next looked at the individual variables. Every state is evenly represented within the dataset with 370 entries each and the year range is from 1928-2011. However, we do not have a record for each disease in each year in each state. In particular, the proportion of records for each disease is given below with measles being the most common and smallpox being the least.
+```{r eval = TRUE}
+disease_summary = diseases %>%
+  count(disease) %>%
+  mutate(proportion = n / sum(n))
+
+knitr::kable(disease_summary, digits = 3)
+```
+
+```{r eval = TRUE}
+```{r eval = TRUE}
+knitr::include_graphics("year.dist.pdf")
+knitr::include_graphics("missing.weeks.pdf")
+knitr::include_graphics(c("counts.ri.pdf", "population.ri.pdf"))
+knitr::include_graphics(c("hist.count.png", "log.count.png"))
+knitr::include_graphics(c("rates.ri.pdf", "rates.us.pdf"))
+```
+
+While this dataset gave evidence for the effectiveness of vaccines, in future work, it would be interesting to focus on any noticeable resurgence in diseases from the anti-vaccine movement. To do so, we would likely need to collect the most recent disease counts. Also, it would be interesting to look at the characteristics of more recent cases (both individual characteristics such as age and state characteristics).

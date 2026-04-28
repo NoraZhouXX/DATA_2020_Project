@@ -1,0 +1,456 @@
+---
+title: "Lab 9: Causal Inference with Difference-in-Differences"
+author: "Your Name"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    number-sections: true
+    code-fold: false
+  pdf: default
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+# Introduction
+
+In this lab, we will study a classic causal inference question:
+
+**Does raising the minimum wage reduce employment?**
+
+We will use a fast-food restaurant dataset modeled after the well-known Card and Krueger setting:
+- **New Jersey (NJ)** increased its minimum wage
+- **Pennsylvania (PA)** did not
+
+This gives us a natural treatment and control setting:
+
+- **Treatment group**: New Jersey restaurants
+- **Control group**: Pennsylvania restaurants
+- **Before period**: before the policy change
+- **After period**: after the policy change
+
+Our goals are:
+
+1. Understand the logic of **Difference-in-Differences (DiD)**
+2. Compare employment before and after the policy
+3. Compare wages before and after the policy
+4. Estimate the causal effect of the minimum wage increase on:
+   - **employment**
+   - **wages**
+
+---
+
+# Part 1: Load Packages and Data
+
+## Why are we doing this?
+
+Before we can analyze the data, we need to:
+- load the packages we will use
+- read the CSV file
+- inspect the dataset
+- make sure variables are stored in the correct format
+
+Because your `fastfood.csv` file is in the **same folder** as the `.qmd` file, we can read it directly with `read.csv("fastfood.csv")`.
+
+```{r}
+# Set CRAN mirror so Quarto does not stop and ask for one during rendering
+options(repos = c(CRAN = "https://cloud.r-project.org"))
+
+# List the packages we need for this lab
+required_packages <- c("tidyverse", "broom")
+
+# Check which packages are not installed yet
+new_packages <- required_packages[
+  !(required_packages %in% installed.packages()[, "Package"])
+]
+
+# Install any missing packages
+if(length(new_packages)){
+  install.packages(new_packages)
+}
+
+# Load all required packages
+lapply(required_packages, library, character.only = TRUE)
+
+# Read the CSV file from the same folder as this .qmd file
+fastfood <- read.csv("fastfood.csv")
+
+# Show the structure of the dataset
+str(fastfood)
+
+# Show the first 6 rows
+head(fastfood)
+
+
+```
+
+# Part 2: Understand the Variables
+## Why are we doing this?
+
+Before running any model, we need to understand:
+
+- what each variable means
+- which variables are categorical
+- which variables are numeric
+- which variables we will use in the DiD setup
+
+```{r}
+# Convert state, time, and chain into categorical variables (factors)
+fastfood$state <- factor(fastfood$state)
+fastfood$time  <- factor(fastfood$time)
+fastfood$chain <- factor(fastfood$chain)
+
+# Check the structure again after converting variables
+str(fastfood)
+
+# Show summary statistics for all variables
+summary(fastfood)
+```
+
+## Key Variables for DiD
+store_id: unique restaurant identifier
+state: NJ or PA
+time: Before or After
+fte: employment measured as full-time equivalent workers
+wage: hourly wage
+chain: restaurant chain
+treat: indicator for treatment group
+post: indicator for after period
+did: interaction term
+
+## Critical Question:
+Why do we need both a treatment group and a control group? Why is it not enough to only look at New Jersey before and after the policy?
+
+If we only looked at New Jersey before and after the policy, we would not know whether any employment change was caused by the minimum wage increase or by something else happening over time. For example, employment could change because of seasonal demand, local economic conditions, or industry trends. The control group gives us a benchmark for what might have happened even without the policy.
+
+# Check for missing values
+Missing values can cause:
+errors in regressions
+dropped observations
+misleading results
+
+So we should always check for them early.
+```{r}
+# Count missing values in each column
+colSums(is.na(fastfood))
+```
+## Critical Question:
+Why is it important to check for missing values before running a regression?
+
+If important variables have missing values, R may silently remove some rows from the analysis. This changes the sample size and can affect results. If the missing data are systematic rather than random, the regression results may also become biased.
+
+# Create the DiD variables
+Even though the dataset already includes treat, post, and did, it is good practice to recreate them ourselves. This helps us understand how the design works.
+
+In a DiD setup:
+treat = 1 if the restaurant is in NJ, otherwise 0
+post = 1 if the observation is after the policy, otherwise 0
+did = treat * post
+```{r}
+# Recreate treatment indicator: 1 for NJ, 0 for PA
+fastfood$treat_new <- ifelse(fastfood$state == "NJ", 1, 0)
+
+# Recreate post indicator: 1 for After, 0 for Before
+fastfood$post_new <- ifelse(fastfood$time == "After", 1, 0)
+
+# Create the DiD interaction term
+fastfood$did_new <- fastfood$treat_new * fastfood$post_new
+
+# Inspect the first 10 rows of the key variables
+fastfood %>%
+  select(store_id, state, time, treat_new, post_new, did_new) %>%
+  head(10)
+```
+
+# Critical Question
+In this lab, which observations have did_new = 1?
+
+Only observations that are both:
+in New Jersey
+in the After period
+These are the treated observations after the policy change.
+
+# Part 3: Descriptive Analysis
+## Why are we doing this?
+Before any regression, we want to build intuition by looking at:
+average employment by state and time
+average wages by state and time
+
+This helps us understand the raw patterns in the data.
+```{r}
+# Compute average employment and wage by state and time
+group_summary <- fastfood %>%
+  group_by(state, time) %>%
+  summarise(
+    mean_fte = mean(fte),
+    mean_wage = mean(wage),
+    n = n(),
+    .groups = "drop"
+  )
+
+# Display the summary table
+group_summary
+```
+## Critical Question
+If average wages increase much more in NJ than in PA, what does that suggest?
+
+It suggests that the policy likely affected wages in NJ, since NJ was the treated state. This is exactly what we would expect if the minimum wage increase was binding and had a real effect on pay.
+
+# Part 4: Visualize Employment and Wages
+## Why are we doing this?
+Plots make the before-and-after patterns easier to see.
+
+We will create:
+- an employment plot
+- a wage plot
+```{r}
+# Plot average employment by state and time
+fastfood %>%
+  group_by(state, time) %>%
+  summarise(mean_fte = mean(fte), .groups = "drop") %>%
+  ggplot(aes(x = time, y = mean_fte, group = state, linetype = state)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Average Employment by State and Time",
+    x = "Time Period",
+    y = "Average FTE Employment"
+  )
+```
+
+```{r}
+# Plot average wage by state and time
+fastfood %>%
+  group_by(state, time) %>%
+  summarise(mean_wage = mean(wage), .groups = "drop") %>%
+  ggplot(aes(x = time, y = mean_wage, group = state, linetype = state)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Average Wage by State and Time",
+    x = "Time Period",
+    y = "Average Hourly Wage"
+  )
+```
+
+## Critical Question
+In a DiD design, what would we expect the wage plot to look like if the treatment had a strong effect on wages?
+
+We would expect the NJ line to rise noticeably after the policy, while the PA line would remain relatively flat or change much less. That would show a larger change in wages for the treated group.
+
+# Part 5: Manual DiD Calculation for Employment
+## Why are we doing this?
+Before running a regression, we can calculate the DiD estimate manually using the group means. This helps us understand the logic of the DiD estimator. The formula is:
+DiD = (Y_NJ,After - Y_NJ,Before) - (Y_PA,After - Y_PA,Before)
+
+```{r}
+# Compute average employment in each group
+employment_means <- fastfood %>%
+  group_by(state, time) %>%
+  summarise(mean_fte = mean(fte), .groups = "drop")
+
+employment_means
+```
+
+```{r}
+# Extract the four means needed for DiD
+nj_before_fte <- employment_means %>%
+  filter(state == "NJ", time == "Before") %>%
+  pull(mean_fte)
+
+nj_after_fte <- employment_means %>%
+  filter(state == "NJ", time == "After") %>%
+  pull(mean_fte)
+
+pa_before_fte <- employment_means %>%
+  filter(state == "PA", time == "Before") %>%
+  pull(mean_fte)
+
+pa_after_fte <- employment_means %>%
+  filter(state == "PA", time == "After") %>%
+  pull(mean_fte)
+
+# Compute within-state changes
+nj_change_fte <- nj_after_fte - nj_before_fte
+pa_change_fte <- pa_after_fte - pa_before_fte
+
+# Compute the DiD estimate
+did_fte_manual <- nj_change_fte - pa_change_fte
+
+# Print the results
+nj_before_fte
+nj_after_fte
+pa_before_fte
+pa_after_fte
+nj_change_fte
+pa_change_fte
+did_fte_manual
+```
+
+## Critical Question:
+Why do we subtract PA's change from NJ's change?
+
+Because PA represents the untreated comparison group. Its change over time captures general time trends that may have affected employment regardless of the policy. By subtracting PA's change, we isolate the extra change associated with treatment.
+
+# Part 6: Manual DiD Calculation for Wages
+```{r}
+# Compute average wages in each group
+wage_means <- fastfood %>%
+  group_by(state, time) %>%
+  summarise(mean_wage = mean(wage), .groups = "drop")
+
+wage_means
+```
+
+```{r}
+# Extract the four means needed for wage DiD
+nj_before_wage <- wage_means %>%
+  filter(state == "NJ", time == "Before") %>%
+  pull(mean_wage)
+
+nj_after_wage <- wage_means %>%
+  filter(state == "NJ", time == "After") %>%
+  pull(mean_wage)
+
+pa_before_wage <- wage_means %>%
+  filter(state == "PA", time == "Before") %>%
+  pull(mean_wage)
+
+pa_after_wage <- wage_means %>%
+  filter(state == "PA", time == "After") %>%
+  pull(mean_wage)
+
+# Compute within-state changes
+nj_change_wage <- nj_after_wage - nj_before_wage
+pa_change_wage <- pa_after_wage - pa_before_wage
+
+# Compute the DiD estimate for wages
+did_wage_manual <- nj_change_wage - pa_change_wage
+
+# Print the results
+nj_before_wage
+nj_after_wage
+pa_before_wage
+pa_after_wage
+nj_change_wage
+pa_change_wage
+did_wage_manual
+```
+
+## Critical Question:
+Suppose wage DiD is clearly positive, but employment DiD is close to zero or positive. What does that suggest?
+
+It suggests that the minimum wage increase raised wages without causing a corresponding decrease in employment. This would go against the simplest version of the standard competitive labor market prediction.
+
+# Part 7: Regression-Based DiD Estimation for Employment
+The manual DiD estimate is useful, but regression gives us a standard, formal framework. The formula is:
+Y = β0 + β1*treat + β2*post + β3*did + ε
+
+Where:
+- Y is the outcome (employment or wages)
+- treat is the treatment group indicator
+- post is the after period indicator
+- did is the interaction term (treat * post)    
+```{r}
+# Run the DiD regression for employment
+model_fte <- lm(fte ~ treat_new + post_new + did_new, data = fastfood)
+
+# Show regression output
+summary(model_fte)
+```
+
+## Critical Question:
+In the employment regression, which coefficient should we focus on if we want the estimated causal effect of the policy?
+
+The coefficient on did_new, because it measures the change in NJ after the policy relative to the change in PA over the same period.
+
+# Part 8: Regression-Based DiD Estimation for Wages
+```{r}
+# Run the DiD regression for wages
+model_wage <- lm(wage ~ treat_new + post_new + did_new, data = fastfood)
+
+# Show regression output
+summary(model_wage)
+```
+
+## Critical Question:
+Why is it useful to estimate the wage effect as well as the employment effect?
+
+Because if the minimum wage policy truly changed labor market conditions, we should first see evidence that wages increased in the treated state. Wage results help verify that the treatment actually affected the intended variable. If wages did not change, then we would not expect to see any employment effect either.   
+
+# Part 9: Tidy Regression Tables
+```{r}
+# Create a tidy table for the employment model
+tidy(model_fte)
+
+# Create a tidy table for the wage model
+tidy(model_wage)
+```
+
+# Part 10: Add Chain Controls
+## Why are we doing this?
+Adding controls can help improve the precision of our estimates and account for any differences in chain distribution between states. For example, if NJ has more McDonald's locations and McDonald's pays higher wages, that could confound our estimates. By controlling for chain, we can better isolate the effect of the minimum wage policy.  
+
+```{r}
+# Employment model with chain controls
+model_fte_controls <- lm(fte ~ treat_new + post_new + did_new + chain, data = fastfood)
+
+# Wage model with chain controls
+model_wage_controls <- lm(wage ~ treat_new + post_new + did_new + chain, data = fastfood)
+
+# Show summaries
+summary(model_fte_controls)
+summary(model_wage_controls)
+```
+
+## Critical Question:
+Why might controlling for chain be helpful in this setting?
+
+Some chains may systematically pay higher wages or employ more workers than others. If chain composition differs between states, then failing to control for chain could mix treatment effects with chain-specific differences.
+
+# Part 11: Compare Manual and Regression DiD Estimates
+```{r}
+# Extract the regression DiD coefficients
+coef(model_fte)["did_new"]
+coef(model_wage)["did_new"]
+
+# Show the manual DiD estimates again
+did_fte_manual
+did_wage_manual
+```
+
+In a simple DiD setup with no additional controls, the manual DiD estimate should equal the regression coefficient on the interaction term.
+
+## Critical Question:
+Why do the manual DiD estimate and the regression interaction coefficient match here?
+
+Because the regression is just a formal way of expressing the same group-mean comparison. In the basic two-group, two-period DiD setup, the interaction coefficient reproduces the same difference-in-differences calculation.
+
+# Assumptions behind DiD
+- Parallel trends: In the absence of treatment, the average outcomes for treated and control groups would have followed parallel paths over time.
+- No spillovers: The treatment in NJ does not affect outcomes in PA.
+- Stable composition: The set of restaurants in each state does not change systematically over time in a way that is related to the treatment.  
+
+In this dataset, we only have one before period and one after period, so we cannot directly test parallel trends well. Because with only one pre-treatment observation, we cannot observe an actual trend before treatment. We can compare levels before treatment, but we cannot see whether the two states were moving similarly over time before the policy.
+
+## Critical Question:
+If NJ and PA were already on very different employment trends before treatment, how would that affect our DiD estimate?
+
+Then the DiD estimate might incorrectly attribute those pre-existing trend differences to the policy. In that case, the causal interpretation would be weaker.
+
+# Conclusions
+## Employment
+The employment DiD estimate tells us whether employment changed more in NJ than in PA after the policy.
+If positive: employment rose more in NJ
+If near zero: employment did not fall relative to PA
+If negative: employment fell more in NJ
+## Wages
+The wage DiD estimate tells us whether wages changed more in NJ than in PA.
+If positive: wages rose more in NJ
+This is what we expect if the policy affected wages
+
+## Critical Question:
+Does a positive DiD coefficient automatically prove causality?
+
+Not automatically. It supports a causal interpretation only if the DiD assumptions are credible, especially parallel trends and the absence of major confounding shocks that affected the treated group differently.
