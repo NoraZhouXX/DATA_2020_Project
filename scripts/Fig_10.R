@@ -16,7 +16,7 @@ library(readxl); library(sandwich); library(ggplot2); library(patchwork)
 # ---------------------------------------------------------------------------
 # 1. Load macro data
 # ---------------------------------------------------------------------------
-macro   <- read_excel("All_data.xls", sheet = "Macro_data")
+macro   <- read_excel("../data/All_data.xls", sheet = "Macro_data")
 n       <- nrow(macro)
 yr      <- seq(1975.0, by = 0.25, length.out = n)
 log_GDP <- log(as.numeric(macro$RGDP)) * 100
@@ -30,7 +30,7 @@ bw_fix <- floor(0.75 * T_smpl^(1/3))
 # ---------------------------------------------------------------------------
 # 2. Load monthly Ct → quarterly, then HP filter for each κ
 # ---------------------------------------------------------------------------
-ct_raw <- read.csv("Ct_monthly.csv", header = TRUE)[, 2]
+ct_raw <- read.csv("../data/Ct_monthly.csv", header = TRUE)[, 2]
 T_q    <- length(ct_raw) / 3
 ct_q   <- sapply(1:T_q, function(j) mean(ct_raw[(3*(j-1)+1):(3*j)]))
 yr_q   <- seq(1981.0, by = 0.25, length.out = T_q)
@@ -212,5 +212,5 @@ rows <- lapply(seq_along(kappa_labels), function(ki) {
 
 fig10 <- rows[[1]] / rows[[2]] / rows[[3]]
 
-ggsave("Fig_10.png", fig10, width = 12, height = 10, dpi = 200)
+ggsave("../output/Fig_10.png", fig10, width = 12, height = 10, dpi = 200)
 cat("Saved: Fig_10.png\n")

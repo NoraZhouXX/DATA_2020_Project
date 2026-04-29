@@ -1,25 +1,23 @@
 # =============================================================================
-# Fig_3.R
-# GDP Components: Consumption + Investment + Residential Investment  (FFR shock)
+# Fig_5.R
+# Headline variables: GDP + PCE Deflator + FFR  (Romer-Romer shock)
 # Lab methods: lm() (Lab 4), sandwich::NeweyWest(), ggplot2 (Lab 2/4/9)
 # INPUTS:  All_data.xls, Ct_dummies.csv
-# OUTPUT:  Fig_3.png
+# OUTPUT:  Fig_5.png
 # =============================================================================
 rm(list = ls())
 library(readxl); library(sandwich); library(ggplot2); library(patchwork)
 
 # --- Load data ---------------------------------------------------------------
-macro   <- read_excel("All_data.xls", sheet = "Macro_data")
+macro   <- read_excel("../data/All_data.xls", sheet = "Macro_data")
 n       <- nrow(macro)
 yr      <- seq(1975.0, by = 0.25, length.out = n)
-log_GDP <- log(as.numeric(macro$RGDP))        * 100
-log_CPI <- log(as.numeric(macro$PCE))         * 100
+log_GDP <- log(as.numeric(macro$RGDP)) * 100
+log_CPI <- log(as.numeric(macro$PCE))  * 100
 FFR     <- as.numeric(macro$FFR)
-log_CON <- log(as.numeric(macro$CONSUMPTION)) * 100   # nondurables + services
-log_INV <- log(as.numeric(macro$INVESTMENT))  * 100   # total fixed investment
-log_RIN <- log(as.numeric(macro$R_INVESTMET)) * 100   # residential investment
+RRSHOCK <- as.numeric(macro$RRSHOCK)    # Romer & Romer (2004) identified shock
 
-dum     <- read.csv("Ct_dummies.csv")
+dum     <- read.csv("../data/Ct_dummies.csv")
 idx_dum <- match(round(dum$year, 4), round(yr, 4))
 p1 <- rep(NA, n); p1[idx_dum] <- dum$p1
 n1 <- rep(NA, n); n1[idx_dum] <- dum$n1
@@ -30,12 +28,13 @@ bw_fix <- floor(0.75 * T_smpl^(1/3))
 cat("Sample:", T_smpl, "quarters | NW bandwidth:", bw_fix, "\n")
 
 # --- Helper functions --------------------------------------------------------
+# Note: RRSHOCK is the shock; FFR lags remain as controls (standard LP practice)
 lag_vec <- function(x, l) c(rep(NA, l), x[seq_len(n - l)])
 
 make_reg_df <- function(Y_lead) {
-  df <- data.frame(Y = Y_lead, SHOCK = FFR, p1 = p1, n1 = n1,
+  df <- data.frame(Y = Y_lead, SHOCK = RRSHOCK, p1 = p1, n1 = n1,
                    trend = seq_len(n), trend2 = seq_len(n)^2)
-  df$p1_SHOCK <- p1 * FFR;  df$n1_SHOCK <- n1 * FFR
+  df$p1_SHOCK <- p1 * RRSHOCK;  df$n1_SHOCK <- n1 * RRSHOCK
   for (l in 0:4) {
     df[[paste0("gdp_l", l)]]    <- lag_vec(log_GDP, l)
     df[[paste0("cpi_l", l)]]    <- lag_vec(log_CPI, l)
@@ -45,7 +44,7 @@ make_reg_df <- function(Y_lead) {
     df[[paste0("n1_cpi_l", l)]] <- n1 * df[[paste0("cpi_l", l)]]
   }
   for (l in 1:4) {
-    df[[paste0("ffr_l", l)]]    <- lag_vec(FFR, l)
+    df[[paste0("ffr_l", l)]]    <- lag_vec(FFR, l)    # FFR lags as controls
     df[[paste0("p1_ffr_l", l)]] <- p1 * df[[paste0("ffr_l", l)]]
     df[[paste0("n1_ffr_l", l)]] <- n1 * df[[paste0("ffr_l", l)]]
   }
@@ -68,18 +67,17 @@ run_lp_h <- function(Y_lead, bw) {
   m_sd <- lm(as.formula(paste("Y ~", paste(sd_rhs, collapse = " + "))), data = df)
   V_sd <- NeweyWest(m_sd, lag = bw, prewhite = FALSE)
 
-  list(b_lin = -coef(m_lin)["SHOCK"],          s_lin = sqrt(V_lin["SHOCK","SHOCK"]),
-       b_H   = -coef(m_sd)["p1_SHOCK"],        s_H   = sqrt(V_sd["p1_SHOCK","p1_SHOCK"]),
-       b_L   = -coef(m_sd)["n1_SHOCK"],        s_L   = sqrt(V_sd["n1_SHOCK","n1_SHOCK"]))
+  list(b_lin = -coef(m_lin)["SHOCK"],   s_lin = sqrt(V_lin["SHOCK","SHOCK"]),
+       b_H   = -coef(m_sd)["p1_SHOCK"], s_H   = sqrt(V_sd["p1_SHOCK","p1_SHOCK"]),
+       b_L   = -coef(m_sd)["n1_SHOCK"], s_L   = sqrt(V_sd["n1_SHOCK","n1_SHOCK"]))
 }
 
 # --- Run LP ------------------------------------------------------------------
 H_max   <- 20;  h_seq <- 0:H_max
-vars_ls <- list(Consumption = log_CON, Investment = log_INV,
-                `Residential Investment` = log_RIN)
+vars_ls <- list(GDP = log_GDP, `PCE Deflator` = log_CPI, FFR = FFR)
 results <- list()
 
-cat("Running LP h = 0 to", H_max, "...\n")
+cat("Running LP (RR shock) h = 0 to", H_max, "...\n")
 for (hi in seq_along(h_seq)) {
   h <- h_seq[hi];  res_h <- list()
   for (vname in names(vars_ls)) {
@@ -101,7 +99,7 @@ irf_df <- do.call(rbind, lapply(seq_along(h_seq), function(hi) {
 }))
 irf_df$lower <- irf_df$est - irf_df$se
 irf_df$upper <- irf_df$est + irf_df$se
-irf_df$var   <- factor(irf_df$var,   levels = c("Consumption","Investment","Residential Investment"))
+irf_df$var   <- factor(irf_df$var,   levels = c("GDP","PCE Deflator","FFR"))
 irf_df$model <- factor(irf_df$model, levels = c("Linear","High","Low"))
 
 # --- ggplot2 panel functions -------------------------------------------------
@@ -148,8 +146,8 @@ plot_state <- function(vl) {
 }
 
 # --- Assemble and save -------------------------------------------------------
-panels <- lapply(c("Consumption","Investment","Residential Investment"),
-                 function(vl) plot_three(vl) | plot_linear(vl) | plot_state(vl))
-fig3 <- panels[[1]] / panels[[2]] / panels[[3]]
-ggsave("Fig_3.png", fig3, width = 12, height = 10, dpi = 200)
-cat("Saved: Fig_3.png\n")
+var_labs <- c("GDP","PCE Deflator","FFR")
+panels   <- lapply(var_labs, function(vl) plot_three(vl) | plot_linear(vl) | plot_state(vl))
+fig5 <- panels[[1]] / panels[[2]] / panels[[3]]
+ggsave("../output/Fig_5.png", fig5, width = 12, height = 10, dpi = 200)
+cat("Saved: Fig_5.png\n")

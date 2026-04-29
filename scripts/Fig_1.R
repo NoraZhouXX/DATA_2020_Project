@@ -18,7 +18,7 @@ library(ggplot2)
 # ---------------------------------------------------------------------------
 # 1. Load monthly Ct and aggregate to quarterly averages
 # ---------------------------------------------------------------------------
-ct_raw <- read.csv("Ct_monthly.csv", header = TRUE)[, 2]   # 432 monthly values
+ct_raw <- read.csv("../data/Ct_monthly.csv", header = TRUE)[, 2]   # 432 monthly values
 T_q    <- length(ct_raw) / 3
 ct_q   <- sapply(1:T_q, function(j) mean(ct_raw[(3*(j-1)+1):(3*j)]))
 yr     <- seq(1981.0, by = 0.25, length.out = T_q)
@@ -56,7 +56,7 @@ write.csv(data.frame(year   = yr,
                      nshock = nshock,
                      p1     = p1,
                      n1     = n1),
-          file = "Ct_dummies.csv", row.names = FALSE)
+          file = "../data/Ct_dummies.csv", row.names = FALSE)
 cat("Saved: Ct_dummies.csv\n")
 
 # ---------------------------------------------------------------------------
@@ -102,5 +102,5 @@ p <- ggplot(df_plt, aes(x = year, y = Ct,
         legend.key.width  = unit(1.5, "cm"),
         panel.grid.minor  = element_blank())
 
-ggsave("Fig_1.png", p, width = 7, height = 4, dpi = 300)
+ggsave("../output/Fig_1.png", p, width = 7, height = 4, dpi = 300)
 cat("Saved: Fig_1.png\n")

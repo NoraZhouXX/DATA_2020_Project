@@ -23,7 +23,7 @@ library(patchwork)   # combine ggplot panels
 # ---------------------------------------------------------------------------
 # 1. Load data
 # ---------------------------------------------------------------------------
-macro   <- read_excel("All_data.xls", sheet = "Macro_data")
+macro   <- read_excel("../data/All_data.xls", sheet = "Macro_data")
 log_GDP <- log(as.numeric(macro$RGDP)) * 100
 log_CPI <- log(as.numeric(macro$PCE))  * 100
 FFR     <- as.numeric(macro$FFR)
@@ -31,7 +31,7 @@ n       <- nrow(macro)
 yr      <- seq(1975.0, by = 0.25, length.out = n)
 
 # Align connectedness dummies with macro data
-dum     <- read.csv("Ct_dummies.csv", header = TRUE)
+dum     <- read.csv("../data/Ct_dummies.csv", header = TRUE)
 idx_dum <- match(round(dum$year, 4), round(yr, 4))
 p1 <- rep(NA, n);  p1[idx_dum] <- dum$p1
 n1 <- rep(NA, n);  n1[idx_dum] <- dum$n1
@@ -245,5 +245,5 @@ panels <- lapply(var_labs, function(vl)
 
 fig2 <- panels[[1]] / panels[[2]] / panels[[3]]
 
-ggsave("Fig_2.png", fig2, width = 12, height = 10, dpi = 200)
+ggsave("../output/Fig_2.png", fig2, width = 12, height = 10, dpi = 200)
 cat("Saved: Fig_2.png\n")

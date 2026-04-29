@@ -16,8 +16,8 @@ library(ggplot2)
 # ---------------------------------------------------------------------------
 # 1. Load Ct series
 # ---------------------------------------------------------------------------
-ct_bench <- read.csv("Ct_monthly.csv", header = TRUE)[, 2]
-ct_macro <- read.csv("Ct_macro_monthly.csv", header = TRUE)[, 2]
+ct_bench <- read.csv("../data/Ct_monthly.csv", header = TRUE)[, 2]
+ct_macro <- read.csv("../data/Ct_macro_monthly.csv", header = TRUE)[, 2]
 
 stopifnot(length(ct_bench) == length(ct_macro))
 T_total <- length(ct_bench)
@@ -81,5 +81,5 @@ fig12 <- ggplot(df, aes(x = date)) +
     panel.grid.minor  = element_blank()
   )
 
-ggsave("Fig_12.png", fig12, width = 10, height = 5, dpi = 200)
+ggsave("../output/Fig_12.png", fig12, width = 10, height = 5, dpi = 200)
 cat("Saved: Fig_12.png\n")

@@ -22,14 +22,14 @@ library(sandwich)    # NeweyWest()
 # ---------------------------------------------------------------------------
 # 1. Load macro data and connectedness dummies
 # ---------------------------------------------------------------------------
-macro   <- read_excel("All_data.xls", sheet = "Macro_data")
+macro   <- read_excel("../data/All_data.xls", sheet = "Macro_data")
 log_GDP <- log(as.numeric(macro$RGDP)) * 100
 log_CPI <- log(as.numeric(macro$PCE))  * 100
 FFR     <- as.numeric(macro$FFR)
 n       <- nrow(macro)
 yr      <- seq(1975.0, by = 0.25, length.out = n)
 
-dum     <- read.csv("Ct_dummies.csv", header = TRUE)
+dum     <- read.csv("../data/Ct_dummies.csv", header = TRUE)
 idx_dum <- match(round(dum$year, 4), round(yr, 4))
 p1 <- rep(NA, n);  p1[idx_dum] <- dum$p1
 n1 <- rep(NA, n);  n1[idx_dum] <- dum$n1

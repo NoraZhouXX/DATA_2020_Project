@@ -40,7 +40,7 @@
 # ---------------------------------------------------------------------------
 # 0. Sanity: confirm we are running from extension/ (relative paths assume so)
 # ---------------------------------------------------------------------------
-if (!file.exists("../connectedness_helpers.R")) {
+if (!file.exists("../scripts/connectedness_helpers.R")) {
   stop("Cannot find ../connectedness_helpers.R. ",
        "Set RStudio working directory to the extension/ folder before sourcing.")
 }
@@ -52,9 +52,9 @@ if (!dir.exists("outputs")) {
 # ---------------------------------------------------------------------------
 # 1. Load shared helpers + data
 # ---------------------------------------------------------------------------
-source("../connectedness_helpers.R")
+source("../scripts/connectedness_helpers.R")
 
-raw        <- read.csv("../EI_DATA.csv", header = TRUE)
+raw        <- read.csv("../data/EI_DATA.csv", header = TRUE)
 sym        <- raw[, c(4:60)]
 data_House <- as.matrix(sym[, c(1:51)])
 
@@ -144,7 +144,7 @@ cat("\nDone! Total:",
 # ---------------------------------------------------------------------------
 # 5. Sanity check: matspill should match existing Ct_monthly.csv exactly
 # ---------------------------------------------------------------------------
-existing_csv <- "../Ct_monthly.csv"
+existing_csv <- "../data/Ct_monthly.csv"
 if (file.exists(existing_csv)) {
   existing_ct <- read.csv(existing_csv)[, 2]
   if (length(existing_ct) == last) {
