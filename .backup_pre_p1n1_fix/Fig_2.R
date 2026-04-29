@@ -101,7 +101,7 @@ run_lp_h <- function(Y_lead, bw) {
 
   # --- State-dependent model (Lab 9 DiD style: no intercept, dummies interact
   #     all controls — High connectedness = p1, Low = n1) ---
-  sd_rhs <- c("0", "p1", "n1", "p1_FFR", "n1_FFR",
+  sd_rhs <- c("0", "p1_FFR", "n1_FFR",
                paste0("p1_gdp_l", 0:4), paste0("n1_gdp_l", 0:4),
                paste0("p1_cpi_l", 0:4), paste0("n1_cpi_l", 0:4),
                paste0("p1_ffr_l", 1:4), paste0("n1_ffr_l", 1:4),

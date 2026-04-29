@@ -68,7 +68,7 @@ run_lp_h <- function(Y_lead, bw) {
   m_lin <- lm(as.formula(paste("Y ~", paste(lin_rhs, collapse = " + "))), data = df)
   V_lin <- NeweyWest(m_lin, lag = bw, prewhite = FALSE)
 
-  sd_rhs <- c("0", "p1_SHOCK", "n1_SHOCK",
+  sd_rhs <- c("0", "p1", "n1", "p1_SHOCK", "n1_SHOCK",
               paste0("p1_gdp_l", 0:4), paste0("n1_gdp_l", 0:4),
               paste0("p1_cpi_l", 0:4), paste0("n1_cpi_l", 0:4),
               paste0("p1_ffr_l", 1:4), paste0("n1_ffr_l", 1:4),

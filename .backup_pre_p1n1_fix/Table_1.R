@@ -86,7 +86,7 @@ run_lp_h <- function(cumY) {
 
   # State-dependent specification: no intercept (p1 + n1 = 1 acts as intercept)
   # This is the Lab 9 DiD equivalent: interacting all controls with regime dummies
-  sd_rhs <- c("0", "p1", "n1", "p1_FFR", "n1_FFR",
+  sd_rhs <- c("0", "p1_FFR", "n1_FFR",
                paste0("p1_gdp_l", 0:4), paste0("n1_gdp_l", 0:4),
                paste0("p1_cpi_l", 0:4), paste0("n1_cpi_l", 0:4),
                paste0("p1_ffr_l", 1:4), paste0("n1_ffr_l", 1:4),

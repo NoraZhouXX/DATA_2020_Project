@@ -1,75 +1,52 @@
 # =============================================================================
-# Fig_13.R
-# IRFs to FFR shock using Macro-controlled Ct regime dummies
+# Fig_11.R
+# IRFs including ZLB (extended sample 1981Q1-2016Q4), Shadow Rate shock
 #
 # Layout: 2 rows × 3 cols
-#   Row (a) "Headline Variables":           GDP / PCE / FFR
+#   Row (a) "Headline Variables":           GDP / PCE / Shadow Rate
 #   Row (b) "Other Expenditure Variables":  Consumption / Investment / Residential Investment
 # Each panel: Linear (black solid) + High (blue dashed + CI) + Low (red dotted + CI)
-# Regime dummies derived from HP-filtered Macro Ct (Ct_macro_monthly.csv)
 #
 # Lab methods: lm() (Lab 4), sandwich::NeweyWest(), ggplot2 (Lab 2/4/9)
-# INPUTS:  All_data.xls, Ct_macro_monthly.csv
-# OUTPUT:  Fig_13.png
+# INPUTS:  All_data.xls, Ct_dummies.csv
+# OUTPUT:  Fig_11.png
 # =============================================================================
 rm(list = ls())
 library(readxl); library(sandwich); library(ggplot2); library(patchwork)
 
 # ---------------------------------------------------------------------------
-# 1. Load macro data
+# 1. Load data
 # ---------------------------------------------------------------------------
 macro    <- read_excel("All_data.xls", sheet = "Macro_data")
 n        <- nrow(macro)
 yr       <- seq(1975.0, by = 0.25, length.out = n)
 log_GDP  <- log(as.numeric(macro$RGDP))        * 100
 log_CPI  <- log(as.numeric(macro$PCE))         * 100
-FFR      <- as.numeric(macro$FFR)
+SHADOW   <- as.numeric(macro$SHADOW_RATE)      # Wu-Xia shadow FFR
 log_CON  <- log(as.numeric(macro$CONSUMPTION)) * 100
 log_INV  <- log(as.numeric(macro$INVESTMENT))  * 100
-log_RIN  <- log(as.numeric(macro$R_INVESTMET)) * 100
+log_RIN  <- log(as.numeric(macro$R_INVESTMET)) * 100  # residential investment
 
-smpl   <- yr >= 1981.0 & yr <= 2007.75
+dum     <- read.csv("Ct_dummies.csv")
+idx_dum <- match(round(dum$year, 4), round(yr, 4))
+p1 <- rep(NA, n); p1[idx_dum] <- dum$p1
+n1 <- rep(NA, n); n1[idx_dum] <- dum$n1
+
+# Extended sample: 1981Q1 – 2016Q4
+smpl   <- yr >= 1981.0 & yr <= 2016.75
 T_smpl <- sum(smpl)
 bw_fix <- floor(0.75 * T_smpl^(1/3))
-cat("Sample:", T_smpl, "quarters | NW bandwidth:", bw_fix, "\n")
+cat("Extended sample:", T_smpl, "quarters | NW bandwidth:", bw_fix, "\n")
 
 # ---------------------------------------------------------------------------
-# 2. Build regime dummies from Macro Ct via HP filter (λ = 1600)
-# ---------------------------------------------------------------------------
-ct_raw <- read.csv("Ct_macro_monthly.csv", header = TRUE)[, 2]
-T_q    <- length(ct_raw) / 3
-ct_q   <- sapply(1:T_q, function(j) mean(ct_raw[(3*(j-1)+1):(3*j)]))
-yr_q   <- seq(1981.0, by = 0.25, length.out = T_q)
-
-hp_filter <- function(y, lambda = 1600) {
-  nn <- length(y)
-  D  <- diff(diag(nn), differences = 2)
-  trend <- solve(diag(nn) + lambda * t(D) %*% D, y)
-  list(trend = as.numeric(trend), cycle = as.numeric(y - trend))
-}
-
-hp      <- hp_filter(ct_q, lambda = 1600)
-pshock  <- as.integer(hp$cycle >= 0)          # 1 = high connectedness
-p1_q    <- c(NA, pshock[-T_q])                # lag one quarter
-n1_q    <- c(NA, as.integer(hp$cycle < 0)[-T_q])
-
-# Map quarterly dummies onto full sample grid
-idx  <- match(round(yr_q, 4), round(yr, 4))
-p1   <- rep(NA, n);  p1[idx] <- p1_q
-n1   <- rep(NA, n);  n1[idx] <- n1_q
-
-cat("High-connectedness quarters:", sum(p1_q, na.rm=TRUE),
-    "| Low:", sum(n1_q, na.rm=TRUE), "\n")
-
-# ---------------------------------------------------------------------------
-# 3. LP helpers
+# 2. LP helpers
 # ---------------------------------------------------------------------------
 lag_vec <- function(x, l) c(rep(NA, l), x[seq_len(n - l)])
 
 run_lp_h <- function(Y_lead, bw) {
-  df <- data.frame(Y = Y_lead, SHOCK = FFR, p1 = p1, n1 = n1,
+  df <- data.frame(Y = Y_lead, SHOCK = SHADOW, p1 = p1, n1 = n1,
                    trend = seq_len(n), trend2 = seq_len(n)^2)
-  df$p1_SHOCK <- p1 * FFR;  df$n1_SHOCK <- n1 * FFR
+  df$p1_SHOCK <- p1 * SHADOW;  df$n1_SHOCK <- n1 * SHADOW
   for (l in 0:4) {
     df[[paste0("gdp_l", l)]]    <- lag_vec(log_GDP, l)
     df[[paste0("cpi_l", l)]]    <- lag_vec(log_CPI, l)
@@ -78,8 +55,9 @@ run_lp_h <- function(Y_lead, bw) {
     df[[paste0("p1_cpi_l", l)]] <- p1 * df[[paste0("cpi_l", l)]]
     df[[paste0("n1_cpi_l", l)]] <- n1 * df[[paste0("cpi_l", l)]]
   }
+  # Shadow rate lags as controls (shadow rate replaces FFR in extended sample)
   for (l in 1:4) {
-    df[[paste0("ffr_l", l)]]    <- lag_vec(FFR, l)
+    df[[paste0("ffr_l", l)]]    <- lag_vec(SHADOW, l)
     df[[paste0("p1_ffr_l", l)]] <- p1 * df[[paste0("ffr_l", l)]]
     df[[paste0("n1_ffr_l", l)]] <- n1 * df[[paste0("ffr_l", l)]]
   }
@@ -90,7 +68,7 @@ run_lp_h <- function(Y_lead, bw) {
   m_lin <- lm(as.formula(paste("Y ~", paste(lin_rhs, collapse = " + "))), data = df)
   V_lin <- NeweyWest(m_lin, lag = bw, prewhite = FALSE)
 
-  sd_rhs <- c("0", "p1", "n1", "p1_SHOCK", "n1_SHOCK",
+  sd_rhs <- c("0", "p1_SHOCK", "n1_SHOCK",
               paste0("p1_gdp_l", 0:4), paste0("n1_gdp_l", 0:4),
               paste0("p1_cpi_l", 0:4), paste0("n1_cpi_l", 0:4),
               paste0("p1_ffr_l", 1:4), paste0("n1_ffr_l", 1:4),
@@ -104,14 +82,14 @@ run_lp_h <- function(Y_lead, bw) {
 }
 
 # ---------------------------------------------------------------------------
-# 4. Run LP for all 6 variables
+# 3. Run LP for all variables
 # ---------------------------------------------------------------------------
 H_max   <- 20;  h_seq <- 0:H_max
-vars_ls <- list(GDP = log_GDP, PCE = log_CPI, FFR = FFR,
+vars_ls <- list(GDP = log_GDP, PCE = log_CPI, `Shadow Rate` = SHADOW,
                 Consumption = log_CON, Investment = log_INV,
                 `Residential Investment` = log_RIN)
 
-cat("Running LP (FFR shock, Macro Ct dummies) h = 0 to", H_max, "...\n")
+cat("Running LP (Shadow Rate shock, extended sample) h = 0 to", H_max, "...\n")
 results <- lapply(seq_along(h_seq), function(hi) {
   h <- h_seq[hi]
   lapply(names(vars_ls), function(vname) {
@@ -121,7 +99,7 @@ results <- lapply(seq_along(h_seq), function(hi) {
 })
 
 # ---------------------------------------------------------------------------
-# 5. Compile IRF data frame
+# 4. Compile IRF data frame
 # ---------------------------------------------------------------------------
 irf_df <- do.call(rbind, lapply(seq_along(h_seq), function(hi) {
   h <- h_seq[hi];  res <- results[[hi]]
@@ -138,12 +116,13 @@ irf_df <- do.call(rbind, lapply(seq_along(h_seq), function(hi) {
   }))
 }))
 
-var_order <- c("GDP","PCE","FFR","Consumption","Investment","Residential Investment")
+var_order <- c("GDP","PCE","Shadow Rate","Consumption","Investment","Residential Investment")
 irf_df$var   <- factor(irf_df$var,   levels = var_order)
 irf_df$model <- factor(irf_df$model, levels = c("Linear","High","Low"))
 
 # ---------------------------------------------------------------------------
-# 6. Panel builder (Fig_10 / Fig_11 style)
+# 5. Panel builder (same style as Fig_10)
+#    Linear = black solid; High = blue dashed + blue CI band; Low = red dotted + dotted CI lines
 # ---------------------------------------------------------------------------
 make_panel <- function(vname, title_label) {
   sub  <- irf_df[irf_df$var == vname, ]
@@ -182,17 +161,19 @@ make_panel <- function(vname, title_label) {
 }
 
 # ---------------------------------------------------------------------------
-# 7. Assemble 2×3 grid with centered row titles
+# 6. Assemble 2×3 grid with centered row titles
+#    Row (a): GDP / PCE / Shadow Rates
+#    Row (b): Consumption / Investment / Residential Investment
 # ---------------------------------------------------------------------------
 
 # Row (a) — Headline Variables
-p_gdp <- make_panel("GDP", "GDP") +
+p_gdp  <- make_panel("GDP",          "GDP") +
   labs(tag = "(a)") +
   theme(plot.tag = element_text(face = "bold", size = 13))
-p_pce <- make_panel("PCE", "PCE")
-p_ffr <- make_panel("FFR", "FFR")
+p_pce  <- make_panel("PCE",          "PCE")
+p_shd  <- make_panel("Shadow Rate",  "Shadow Rates")
 
-row_a <- (p_gdp | p_pce | p_ffr) +
+row_a <- (p_gdp | p_pce | p_shd) +
   plot_annotation(
     title = "Headline Variables",
     theme = theme(
@@ -202,11 +183,11 @@ row_a <- (p_gdp | p_pce | p_ffr) +
   )
 
 # Row (b) — Other Expenditure Variables
-p_con <- make_panel("Consumption",           "Consumption") +
+p_con  <- make_panel("Consumption",           "Consumption") +
   labs(tag = "(b)") +
   theme(plot.tag = element_text(face = "bold", size = 13))
-p_inv <- make_panel("Investment",            "Investment")
-p_rin <- make_panel("Residential Investment","Residential Investment")
+p_inv  <- make_panel("Investment",            "Investment")
+p_rin  <- make_panel("Residential Investment","Residential Investment")
 
 row_b <- (p_con | p_inv | p_rin) +
   plot_annotation(
@@ -217,6 +198,6 @@ row_b <- (p_con | p_inv | p_rin) +
     )
   )
 
-fig13 <- row_a / row_b
-ggsave("Fig_13.png", fig13, width = 12, height = 8, dpi = 200)
-cat("Saved: Fig_13.png\n")
+fig11 <- row_a / row_b
+ggsave("Fig_11.png", fig11, width = 12, height = 8, dpi = 200)
+cat("Saved: Fig_11.png\n")

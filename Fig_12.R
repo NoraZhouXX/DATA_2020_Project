@@ -70,7 +70,7 @@ fig12 <- ggplot(df, aes(x = date)) +
                "Connectedness (Macro)"     = "dashed")
   ) +
   scale_x_date(date_breaks = "5 years", date_labels = "%Y",
-               limits = range(df$date)) +
+               limits = c(as.Date("1981-01-01"), as.Date("2007-12-31"))) +
   labs(x = "Year", y = NULL, colour = NULL, linetype = NULL) +
   theme_bw(base_size = 10) +
   theme(

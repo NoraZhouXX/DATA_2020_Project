@@ -1,9 +1,9 @@
 # =============================================================================
-# Fig_5.R
-# Headline variables: GDP + PCE Deflator + FFR  (Romer-Romer shock)
+# Fig_7.R
+# Other macro variables: Employment + Real Wage + House Price  (RR shock)
 # Lab methods: lm() (Lab 4), sandwich::NeweyWest(), ggplot2 (Lab 2/4/9)
 # INPUTS:  All_data.xls, Ct_dummies.csv
-# OUTPUT:  Fig_5.png
+# OUTPUT:  Fig_7.png
 # =============================================================================
 rm(list = ls())
 library(readxl); library(sandwich); library(ggplot2); library(patchwork)
@@ -12,10 +12,13 @@ library(readxl); library(sandwich); library(ggplot2); library(patchwork)
 macro   <- read_excel("All_data.xls", sheet = "Macro_data")
 n       <- nrow(macro)
 yr      <- seq(1975.0, by = 0.25, length.out = n)
-log_GDP <- log(as.numeric(macro$RGDP)) * 100
-log_CPI <- log(as.numeric(macro$PCE))  * 100
+log_GDP <- log(as.numeric(macro$RGDP))        * 100
+log_CPI <- log(as.numeric(macro$PCE))         * 100
 FFR     <- as.numeric(macro$FFR)
-RRSHOCK <- as.numeric(macro$RRSHOCK)    # Romer & Romer (2004) identified shock
+RRSHOCK <- as.numeric(macro$RRSHOCK)
+log_EMP <- log(as.numeric(macro$EMPLOYMENT))  * 100
+log_WAG <- log(as.numeric(macro$REAL_WAGE))   * 100
+log_HP  <- log(as.numeric(macro$HOUSE_PRICE)) * 100
 
 dum     <- read.csv("Ct_dummies.csv")
 idx_dum <- match(round(dum$year, 4), round(yr, 4))
@@ -28,7 +31,6 @@ bw_fix <- floor(0.75 * T_smpl^(1/3))
 cat("Sample:", T_smpl, "quarters | NW bandwidth:", bw_fix, "\n")
 
 # --- Helper functions --------------------------------------------------------
-# Note: RRSHOCK is the shock; FFR lags remain as controls (standard LP practice)
 lag_vec <- function(x, l) c(rep(NA, l), x[seq_len(n - l)])
 
 make_reg_df <- function(Y_lead) {
@@ -44,7 +46,7 @@ make_reg_df <- function(Y_lead) {
     df[[paste0("n1_cpi_l", l)]] <- n1 * df[[paste0("cpi_l", l)]]
   }
   for (l in 1:4) {
-    df[[paste0("ffr_l", l)]]    <- lag_vec(FFR, l)    # FFR lags as controls
+    df[[paste0("ffr_l", l)]]    <- lag_vec(FFR, l)
     df[[paste0("p1_ffr_l", l)]] <- p1 * df[[paste0("ffr_l", l)]]
     df[[paste0("n1_ffr_l", l)]] <- n1 * df[[paste0("ffr_l", l)]]
   }
@@ -59,7 +61,7 @@ run_lp_h <- function(Y_lead, bw) {
   m_lin <- lm(as.formula(paste("Y ~", paste(lin_rhs, collapse = " + "))), data = df)
   V_lin <- NeweyWest(m_lin, lag = bw, prewhite = FALSE)
 
-  sd_rhs <- c("0", "p1", "n1", "p1_SHOCK", "n1_SHOCK",
+  sd_rhs <- c("0", "p1_SHOCK", "n1_SHOCK",
               paste0("p1_gdp_l", 0:4), paste0("n1_gdp_l", 0:4),
               paste0("p1_cpi_l", 0:4), paste0("n1_cpi_l", 0:4),
               paste0("p1_ffr_l", 1:4), paste0("n1_ffr_l", 1:4),
@@ -74,7 +76,7 @@ run_lp_h <- function(Y_lead, bw) {
 
 # --- Run LP ------------------------------------------------------------------
 H_max   <- 20;  h_seq <- 0:H_max
-vars_ls <- list(GDP = log_GDP, `PCE Deflator` = log_CPI, FFR = FFR)
+vars_ls <- list(Employment = log_EMP, `Real Wage` = log_WAG, `House Price` = log_HP)
 results <- list()
 
 cat("Running LP (RR shock) h = 0 to", H_max, "...\n")
@@ -99,7 +101,7 @@ irf_df <- do.call(rbind, lapply(seq_along(h_seq), function(hi) {
 }))
 irf_df$lower <- irf_df$est - irf_df$se
 irf_df$upper <- irf_df$est + irf_df$se
-irf_df$var   <- factor(irf_df$var,   levels = c("GDP","PCE Deflator","FFR"))
+irf_df$var   <- factor(irf_df$var,   levels = c("Employment","Real Wage","House Price"))
 irf_df$model <- factor(irf_df$model, levels = c("Linear","High","Low"))
 
 # --- ggplot2 panel functions -------------------------------------------------
@@ -146,8 +148,8 @@ plot_state <- function(vl) {
 }
 
 # --- Assemble and save -------------------------------------------------------
-var_labs <- c("GDP","PCE Deflator","FFR")
+var_labs <- c("Employment","Real Wage","House Price")
 panels   <- lapply(var_labs, function(vl) plot_three(vl) | plot_linear(vl) | plot_state(vl))
-fig5 <- panels[[1]] / panels[[2]] / panels[[3]]
-ggsave("Fig_5.png", fig5, width = 12, height = 10, dpi = 200)
-cat("Saved: Fig_5.png\n")
+fig7 <- panels[[1]] / panels[[2]] / panels[[3]]
+ggsave("Fig_7.png", fig7, width = 12, height = 10, dpi = 200)
+cat("Saved: Fig_7.png\n")

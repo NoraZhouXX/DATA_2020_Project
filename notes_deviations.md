@@ -38,11 +38,11 @@ House Price responses tend to match the paper more closely because the signal is
 
 The `sandwich` package applies a small-sample correction to the Newey-West covariance matrix by default. EViews does not. This makes our confidence bands slightly wider than those in the paper, most visibly at short horizons where the sample used in each regression is smaller.
 
-### 2.3 Figure 12 — X-Axis Range
+### 2.3 Figure 12 — X-Axis Range (RESOLVED)
 
-**Root cause: `Ct_monthly.csv` spans 1981–2016, but the paper's Figure 12 only displays 1981–2007.**
+**Previous issue:** `Ct_monthly.csv` spans 1981–2016, but the paper's Figure 12 only displays 1981–2007. `Fig_12.R` previously plotted the entire series (`limits = range(df$date)`), making the x-axis roughly 10 years longer than in the paper.
 
-`Compute_Ct.R` computes a rolling connectedness index over the full data range available in `EI_DATA.csv` (1981–2016). The current `Fig_12.R` plots the entire series (`limits = range(df$date)`), making the x-axis roughly 10 years longer than in the paper. The fix is to clip the x-axis upper limit to December 2007.
+**Fix applied:** changed `limits = range(df$date)` to `limits = c(as.Date("1981-01-01"), as.Date("2007-12-31"))` in `scale_x_date()`. The underlying connectedness series is unchanged; only the displayed x-axis range was clipped to match the paper.
 
 ### 2.4 Visual Style
 
@@ -58,5 +58,5 @@ The paper's figures are produced in MATLAB, which uses serif axis labels, specif
 | `glmnet` not in labs | `Compute_Ct.R`, `Compute_Ct_macro.R` | No lab equivalent for high-dim VAR | N/A — necessary |
 | IRF shape differences | Fig_2 – Fig_7, Fig_10, Fig_13 | R vs. MATLAB Elastic Net → different Ct → different dummies | Only by replicating MATLAB solver exactly |
 | Confidence band width | All LP figures | `NeweyWest(adjust=TRUE)` vs. EViews | Yes: use `adjust=FALSE` |
-| Fig_12 x-axis too long | `Fig_12.R` | Ct series extends to 2016; no date clipping | Yes: set `xlim` to 2007-12-31 |
+| Fig_12 x-axis too long | `Fig_12.R` | Ct series extends to 2016; no date clipping | RESOLVED: clipped to 2007-12-31 |
 | Visual style | All figures | ggplot2 vs. MATLAB aesthetics | Partially, with theme customization |

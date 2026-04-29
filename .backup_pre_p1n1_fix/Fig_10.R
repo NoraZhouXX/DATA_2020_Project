@@ -86,7 +86,7 @@ run_lp_h <- function(Y_lead, p1, n1, bw) {
   V_lin <- NeweyWest(m_lin, lag=bw, prewhite=FALSE)
 
   # State-dependent model (Lab 9 DiD style)
-  sd_rhs <- c("0", "p1", "n1", "p1_SHOCK","n1_SHOCK",
+  sd_rhs <- c("0","p1_SHOCK","n1_SHOCK",
               paste0("p1_gdp_l",0:4), paste0("n1_gdp_l",0:4),
               paste0("p1_cpi_l",0:4), paste0("n1_cpi_l",0:4),
               paste0("p1_ffr_l",1:4), paste0("n1_ffr_l",1:4),
