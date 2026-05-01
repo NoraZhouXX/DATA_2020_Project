@@ -171,5 +171,5 @@ for (h in horizons) {
 cat("\n========== TABLE 1 ==========\n")
 print(tab, row.names = FALSE)
 
-write.csv(tab, file = "Table_1.csv", row.names = FALSE)
+write.csv(tab, file = "../tables/Table_1.csv", row.names = FALSE)
 cat("\nSaved: Table_1.csv\n")

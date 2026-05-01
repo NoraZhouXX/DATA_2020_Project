@@ -25,7 +25,7 @@ source("connectedness_helpers.R")
 # ---------------------------------------------------------------------------
 # 1. Load data
 # ---------------------------------------------------------------------------
-raw <- read.csv("EI_DATA.csv", header = TRUE)
+raw <- read.csv("../data/EI_DATA.csv", header = TRUE)
 
 # Columns 4-54: 51 state housing return series (AK..WY)
 sym        <- raw[, c(4:60)]
@@ -86,5 +86,5 @@ cat("\nDone! Total:", round((proc.time() - start_time)[3] / 60, 1), "min\n")
 # ---------------------------------------------------------------------------
 # 4. Save results
 # ---------------------------------------------------------------------------
-write.csv(matspill, file = "Ct_monthly.csv", row.names = TRUE)
+write.csv(matspill, file = "../data/Ct_monthly.csv", row.names = TRUE)
 cat("Saved: Ct_monthly.csv\n")

@@ -10,6 +10,6 @@ stock_vol[1] <- stock_vol[2]
 
 EI_DATA <- cbind(house_data, stock_vol)
 
-write.csv(EI_DATA, file="EI_DATA.csv", row.names=FALSE)
+write.csv(EI_DATA, file="../data/EI_DATA.csv", row.names=FALSE)
 
 
